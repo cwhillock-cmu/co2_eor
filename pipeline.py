@@ -14,6 +14,7 @@ from idaes.core.util.config import is_physical_parameter_block
 from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.model_statistics import degrees_of_freedom
+from idaes.core.scaling.custom_scaler_base import CustomScalerBase
 
 #specify configuration options
 def make_pipeline_config_block(config):
@@ -41,6 +42,7 @@ def make_pipeline_config_block(config):
             "R",
             ConfigValue(default=8.314462,domain=float)
             )
+    
     config.declare(
             "property_package_args",
             ConfigBlock(implicit=True)
@@ -82,7 +84,7 @@ def add_equations(unit,name,config):
     #outlet=unit.outlet
     #average=unit.average
     #create a set of slack variables for feasibility problem
-    num_slacks=10
+    num_slacks=12
     unit.spos = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.sneg = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.spos.fix(0)
@@ -126,7 +128,7 @@ def add_equations(unit,name,config):
             ) 
     #average friction factor
     average.f = pyo.Expression(expr=
-            0.25*(pyo.log10(unit.roughness/3.7/unit.diameter+5.74/(average.Re**0.9)))**(-2)
+            0.25*(pyo.log10(unit.roughness/3.7/unit.diameter+5.74/((average.Re+unit.spos[12]-unit.sneg[12])**0.9)))**(-2)
             )
     #isothermal constraint
     unit.isothermal_constraint=pyo.Constraint(expr=
@@ -139,7 +141,7 @@ def add_equations(unit,name,config):
     #hydraulic equation
     unit.hydraulic_constraint = pyo.Constraint(expr=
             (inlet.pressure**2-outlet.pressure**2)/(2*average.dens_mass**2*average.velocity**2)
-            ==average.Z*unit.R/average.mw*average.temperature*(average.f*unit.length/2/unit.diameter+pyo.log(inlet.pressure/outlet.pressure))+unit.spos[8]-unit.sneg[8]
+            ==average.Z*unit.R/average.mw*average.temperature*(average.f*unit.length/2/unit.diameter+pyo.log(inlet.pressure/outlet.pressure+unit.spos[11]-unit.sneg[11]))+unit.spos[8]-unit.sneg[8]
             ) #constraint 8
     #useful expression
     unit.deltaP = pyo.Expression(expr=
@@ -159,6 +161,12 @@ def add_equations(unit,name,config):
             ==average.Z*unit.R/average.mw*average.temperature*unit.simple_f*unit.length/2/unit.diameter +unit.spos[10]-unit.sneg[10]
             ) #constraint 10
     unit.simple_hydraulic_constraint.deactivate()
+    
+    #inequality constraints
+    #pressure bound
+    unit.pressure_bound_constraint = pyo.Constraint(
+            expr=outlet.pressure<=inlet.pressure
+            )
 
 def guess_scales(unit,name,config):
     #create local variables for ease
@@ -194,6 +202,7 @@ def guess_scales(unit,name,config):
     set_scaling_factor(unit.hydraulic_constraint,1e-3)
     set_scaling_factor(unit.simple_average_pressure_constraint,1e-7)
     set_scaling_factor(unit.simple_hydraulic_constraint,1e-3)
+    set_scaling_factor(unit.pressure_bound_constraint,1e-7)
 
 #define pipeline class
 @declare_process_block_class("pipeline")
@@ -210,18 +219,25 @@ class pipelineData(UnitModelBlockData):
         guess_scales(self,'scales',self.config)
         self.add_inlet_port(block=self.control_volume.properties_in,name="inlet")
         self.add_outlet_port(block=self.control_volume.properties_out,name="outlet")
-    
-    def activate_feasibility_problem(self):
-        self.feasibility_objective.activate()
+
+    def activate_slack_variables(self):
         self.spos.unfix()
         self.sneg.unfix()
-    
-    def deactivate_feasibility_problem(self):
-        self.feasibility_objective.deactivate()
+
+    def deactivate_slack_variables(self):
         self.spos.fix(0)
         self.sneg.fix(0)
 
-    def initialize(self,solver='ipopt',tee=True):
+    def activate_feasibility_problem(self):
+        self.activate_slack_variables()
+        self.feasibility_objective.activate()
+    
+    def deactivate_feasibility_problem(self):
+        self.deactivate_slack_variables()
+        self.feasibility_objective.deactivate()
+
+    def initialize(self,solver='ipopt',tee=False):
+        print(f'Start initialization Pipeline')
         self.activate_feasibility_problem()
         self.average_pressure_constraint.deactivate()
         self.hydraulic_constraint.deactivate()
@@ -230,6 +246,7 @@ class pipelineData(UnitModelBlockData):
         #create internal solver
         try:
             local_solver=pyo.SolverFactory(solver)
+            local_solver.options['linear_solver']='ma97'
             print(f'loaded passed solver')
         except:
             local_solver=pyo.SolverFactory('ipopt')
@@ -244,11 +261,18 @@ class pipelineData(UnitModelBlockData):
         res=local_solver.solve(scaled_self,tee=tee)
         #undo scaling
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
-        #self.display()
         #create autoscaler
         autoScaler=AutoScaler(overwrite=True)
         autoScaler.scale_variables_by_magnitude(self)
         #autoScaler.scale_constraints_by_jacobian_norm(self)
         self.deactivate_feasibility_problem()
+        print(f'End initialization Pipeline')
+
+    def print_expressions(self):
+        print(f'Average Velocity:{pyo.value(self.control_volume.properties_avg.velocity)}')
+        print(f'Average Re:{pyo.value(self.control_volume.properties_avg.Re)}')
+        print(f'Average f:{pyo.value(self.control_volume.properties_avg.f)}')
+        print(f'Pressure Drop:{pyo.value(self.deltaP)}')
+
 
 

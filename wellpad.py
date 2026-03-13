@@ -54,6 +54,10 @@ def make_wellpad_config_block(config):
             ConfigValue(default=1.1e-13,domain=float)#overall permeability constant STB
             )
     config.declare(
+            "use_correction_factor",
+            ConfigValue(default=False,domain=bool)
+            )
+    config.declare(
             "SC_A",
             ConfigValue(default=0.4,domain=float)#sensitivity curve fit parameter A
             )
@@ -64,6 +68,14 @@ def make_wellpad_config_block(config):
     config.declare(
             "IR_base",
             ConfigValue(default=0.00231,domain=float)#base case injection rate #RB/s
+            )
+    config.declare(
+            "BHP_max",
+            ConfigValue(default=300*100000,domain=float)#maximum injection pressure
+            )
+    config.declare(
+            "multiplier",
+            ConfigValue(default=1,domain=int) #flow multiplier
             )
     config.declare(
             "property_package_args",
@@ -97,33 +109,38 @@ def add_params(unit,name,config):
     unit.GB_A = pyo.Param(initialize=config.GB_A)
     unit.GB_B = pyo.Param(initialize=config.GB_B)
     unit.kovr = pyo.Param(initialize=config.kovr)
-    unit.SC_A = pyo.Param(initialize=config.SC_A)
-    unit.SC_B = pyo.Param(initialize=config.SC_B)
-    unit.IR_base = pyo.Param(initialize=config.IR_base)
-    unit.SC_at_base_IR = pyo.Param(initialize=unit.SC_A*(1-pyo.exp(-unit.SC_B*unit.IR_base)))
+    if config.use_correction_factor:
+        unit.SC_A = pyo.Param(initialize=config.SC_A)
+        unit.SC_B = pyo.Param(initialize=config.SC_B)
+        unit.IR_base = pyo.Param(initialize=config.IR_base)
+        unit.SC_at_base_IR = pyo.Param(initialize=unit.SC_A*(1-pyo.exp(-unit.SC_B*unit.IR_base)))
+    unit.BHP_max = pyo.Param(initialize=config.BHP_max)
+    unit.multiplier = pyo.Param(initialize=config.multiplier)
 
 #adding variables and constraints
 def add_equations(unit,name,config):
     inlet=unit.control_volume.properties_in[0]
     injection_state=unit.control_volume.injection_state
     reservoir_state=unit.control_volume.properties_out[0]
-    #inlet = unit.inlet
-    #injection_state = unit.injection_state
-    #reservoir_state = unit.reservoir_state
+
     #define HCPV
     unit.HCPV = pyo.Var(domain=pyo.NonNegativeReals)
+
     #create slack variables for initialization
     num_slacks=6
     unit.spos = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.sneg = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.spos.fix(0)
     unit.sneg.fix(0)
+    #create feasibility expression and objective function
     unit.feasibility_expression = pyo.Expression(expr=pyo.quicksum(unit.spos[i]+unit.sneg[i] for i in range(1,num_slacks+1)))
     unit.feasibility_objective = pyo.Objective(expr=unit.feasibility_expression)
     unit.feasibility_objective.deactivate()
+
+    #equality constraints
     #mass balance between injection state and inlet state
     unit.mass_bal_constraint1 = pyo.Constraint(
-            expr=inlet.flow_mass==injection_state.flow_mass +unit.spos[1]-unit.sneg[1]
+            expr=inlet.flow_mass==injection_state.flow_mass*unit.multiplier +unit.spos[1]-unit.sneg[1]
             ) #constraint 1
     #mass balance between injection state and reservoir state
     unit.mass_bal_constraint2 = pyo.Constraint(
@@ -147,22 +164,39 @@ def add_equations(unit,name,config):
     unit.injection_rate_from_darcys_law_constraint = pyo.Constraint(
             expr=unit.q_CO2_INJ==unit.kovr/reservoir_state.visc_d_phase["Vap"]*(injection_state.pressure-reservoir_state.pressure) +unit.spos[6]-unit.sneg[6]
             ) #constraint 4
+
     #sensitivity curve correction factor
-    unit.correction_factor = pyo.Expression(
-            expr=(1-pyo.exp(-unit.SC_B*unit.q_CO2_INJ))/(1-pyo.exp(-unit.SC_B*unit.IR_base))
-            )
+    if config.use_correction_factor:
+        unit.correction_factor = pyo.Expression(
+                expr=(1-pyo.exp(-unit.SC_B*unit.q_CO2_INJ))/(1-pyo.exp(-unit.SC_B*unit.IR_base))
+                )
+    else:
+        unit.correction_factor = pyo.Expression(expr=1)
+    
+    #expressions for production rates
     #Oil production rate STB/s
     unit.q_OIL_PROD = pyo.Expression(
-            expr=1/unit.Boi*unit.PC_A*unit.PC_B/(unit.HCPV+unit.PC_B)**2*unit.q_CO2_INJ*unit.correction_factor
+            expr=1/unit.Boi*unit.PC_A*unit.PC_B/(unit.HCPV+unit.PC_B)**2*unit.q_CO2_INJ*unit.correction_factor*unit.multiplier
             )
     #gas production rate
     unit.q_GAS_PROD = pyo.Expression(
-            expr=unit.GOR*unit.q_OIL_PROD*unit.Boi
+            expr=unit.GOR*unit.q_OIL_PROD*unit.Boi*unit.multiplier
             )
     #gas breakthrough rate
     unit.q_CO2_BRKTH = pyo.Expression(
-            expr=unit.GB_A*unit.GB_B*unit.HCPV**(unit.GB_B-1)*unit.q_CO2_INJ
+            expr=unit.GB_A*unit.GB_B*unit.HCPV**(unit.GB_B-1)*unit.q_CO2_INJ*unit.multiplier
             )
+    
+    #inequality constraints
+    #maximum injection pressure
+    unit.max_BHP_constraint = pyo.Constraint(
+            expr=injection_state.pressure<=unit.BHP_max
+            )
+    #ensure injection pressure is greater than reservoir pressure
+    unit.min_BHP_constraint = pyo.Constraint(
+            expr=injection_state.pressure>=reservoir_state.pressure
+            )
+
 
 def guess_scales(unit,name,config):
     inlet=unit.control_volume.properties_in[0]
@@ -174,25 +208,28 @@ def guess_scales(unit,name,config):
     set_scaling_factor(unit.PC_B,10)
     set_scaling_factor(unit.GB_A,10)
     set_scaling_factor(unit.kovr,1e13)
-    set_scaling_factor(unit.SC_A,10)
-    set_scaling_factor(unit.SC_B,1e-2)
-    set_scaling_factor(unit.IR_base,1e3)
+    if config.use_correction_factor:
+        set_scaling_factor(unit.SC_A,10)
+        set_scaling_factor(unit.SC_B,1e-2)
+        set_scaling_factor(unit.IR_base,1e3)
     set_scaling_factor(inlet.pressure,1e-7)
     set_scaling_factor(reservoir_state.pressure,1e-7)
     set_scaling_factor(injection_state.pressure,1e-7)
     set_scaling_factor(inlet.temperature,1e-2)
     set_scaling_factor(reservoir_state.temperature,1e-2)
     set_scaling_factor(injection_state.temperature,1e-2)
-    set_scaling_factor(inlet.flow_mass,1e-2)
-    set_scaling_factor(reservoir_state.flow_mass,1e-2)
-    set_scaling_factor(injection_state.flow_mass,1e-2)
-    set_scaling_factor(unit.mass_bal_constraint1,1e-2)
-    set_scaling_factor(unit.mass_bal_constraint2,1e-2)
+    set_scaling_factor(inlet.flow_mass,1e1)
+    set_scaling_factor(reservoir_state.flow_mass,1e1)
+    set_scaling_factor(injection_state.flow_mass,1e1)
+    set_scaling_factor(unit.mass_bal_constraint1,1e1)
+    set_scaling_factor(unit.mass_bal_constraint2,1e1)
     set_scaling_factor(unit.isothermal_constraint,1e-2)
     set_scaling_factor(unit.pressure_drop_constraint,1e-7)
     set_scaling_factor(unit.q_CO2_INJ,1e3)
     set_scaling_factor(unit.injection_rate_from_density_constraint,1e3)
     set_scaling_factor(unit.injection_rate_from_darcys_law_constraint,1e3)
+    set_scaling_factor(unit.BHP_max,1e-7)
+    set_scaling_factor(unit.max_BHP_constraint,1e-7)
 
 #define wellpad class
 @declare_process_block_class("wellpad")
@@ -210,21 +247,29 @@ class wellpadData(UnitModelBlockData):
         self.add_inlet_port(block=self.control_volume.properties_in,name="inlet")
         self.add_outlet_port(block=self.control_volume.properties_out,name="reservoir_state")
     
-    def activate_feasibility_problem(self):
-        self.feasibility_objective.activate()
+    def activate_slack_variables(self):
         self.spos.unfix()
         self.sneg.unfix()
-    
-    def deactivate_feasibility_problem(self):
-        self.feasibility_objective.deactivate()
+
+    def deactivate_slack_variables(self):
         self.spos.fix(0)
         self.sneg.fix(0)
 
+    def activate_feasibility_problem(self):
+        self.activate_slack_variables()
+        self.feasibility_objective.activate()
+    
+    def deactivate_feasibility_problem(self):
+        self.deactivate_slack_variables()
+        self.feasibility_objective.deactivate()
+
     def initialize(self,solver='ipopt',tee=False):
+        print(f'Start Initialization Wellpad')
         self.activate_feasibility_problem()
         #create internal solver
         try:
             local_solver=pyo.SolverFactory(solver)
+            local_solver.options['linear_solver']='ma97'
             print(f'loaded passed solver')
         except:
             local_solver=pyo.SolverFactory('ipopt')
@@ -240,6 +285,7 @@ class wellpadData(UnitModelBlockData):
         autoScaler.scale_variables_by_magnitude(self)
         #autoScaler.scale_constraints_by_jacobian_norm(self)
         self.deactivate_feasibility_problem()
+        print(f'End Initialization Wellpad')
 
     def print_expressions(self):
         print(f'correction factor={pyo.value(self.correction_factor)}')

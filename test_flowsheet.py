@@ -23,7 +23,7 @@ model.flowsheet.paramBlock =idaesHelmholtz.HelmholtzParameterBlock(
 model.flowsheet.pipe1 = pipeline(
         property_package=model.flowsheet.paramBlock,
         length=20000,
-        diameter = 0.8,
+        diameter = 0.05,
         roughness=0.0475e-3,
         )
 
@@ -81,15 +81,14 @@ model.flowsheet.wellpad1.initialize()
 model.flowsheet.pipe1.inlet.flow_mass[0].unfix()
 model.flowsheet.compressor.outlet.pressure[0].fix(140*100000)
 
-
 #solve feasibility problem
 model.flowsheet.pipe1.activate_feasibility_problem()
-model.flowsheet.wellpad1.activate_feasibility_problem()
+#model.flowsheet.wellpad1.activate_feasibility_problem()
 model.flowsheet.pipe1.feasibility_objective.deactivate()
 model.flowsheet.wellpad1.feasibility_objective.deactivate()
 model.obj = pyo.Objective(expr=model.flowsheet.pipe1.feasibility_expression + model.flowsheet.wellpad1.feasibility_expression)
 solver = pyo.SolverFactory("ipopt")
-solver.options['linear_solver']='ma27'
+solver.options['linear_solver']='ma57'
 solver.options['nlp_scaling_method']='user-scaling'
 
 res = solver.solve(model,tee=True)
@@ -97,5 +96,7 @@ res = solver.solve(model,tee=True)
 model.flowsheet.pipe1.display()
 model.flowsheet.compressor.display()
 model.flowsheet.wellpad1.display()
+print(f'Pipe Delta P={pyo.value(model.flowsheet.pipe1.deltaP)}')
+print(f'CO2 Injection Rate (kg/s)={pyo.value(model.flowsheet.wellpad1.inlet.flow_mass[0])}')
 model.flowsheet.wellpad1.print_expressions()
 
