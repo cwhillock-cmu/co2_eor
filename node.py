@@ -72,7 +72,7 @@ def add_constraints(unit,name,config):
             property_package=config.property_package,
             ideal_separation=False,
             outlet_list=config.outlet_list,
-            energy_split_basis=EnergySplittingType.equal_temperature,
+            energy_split_basis=EnergySplittingType.equal_molar_enthalpy,
             momentum_balance_type=MomentumBalanceType.none,
             #momentum_balance_type=MomentumBalanceType.pressureTotal,
             mixed_state_block=unit.mixed_state,
@@ -81,7 +81,10 @@ def add_constraints(unit,name,config):
     #pyo.TransformationFactory("network.expand_arcs").apply_to(unit)
 
     #splitter outlet pressure <= mixed state pressure
-    #do this later
+    @unit.split.Constraint(unit.flowsheet().time,unit.split.outlet_idx,)
+    def pressure_inequality_constraint(b,t,o):
+        o_block = getattr(unit.split,o+"_state")
+        return unit.mixed_state[t].pressure>=o_block[t].pressure
 
 #create node class
 @declare_process_block_class("node")

@@ -263,28 +263,30 @@ class wellpadData(UnitModelBlockData):
         self.deactivate_slack_variables()
         self.feasibility_objective.deactivate()
 
-    def initialize(self,solver='ipopt',tee=False):
+    def initialize(self,solver=None,tee=False,display_after=False):
         print(f'Start Initialization Wellpad')
+
+        #activate feasibility problem
         self.activate_feasibility_problem()
-        #create internal solver
-        try:
-            local_solver=pyo.SolverFactory(solver)
-            local_solver.options['linear_solver']='ma97'
-            print(f'loaded passed solver')
-        except:
-            local_solver=pyo.SolverFactory('ipopt')
-            print(f'loaded backup solver')
-        #create scaled unit
+        #scale model
         scaled_self = pyo.TransformationFactory('core.scale_model').create_using(self)
-        res=local_solver.solve(scaled_self,tee=tee)
+        if solver==None:
+            solver = pyo.SolverFactory('ipopt')
+            solver.options['linear_solver']='ma97'
+        res = solver.solve(scaled_self,tee=tee)
         #undo scaling
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
-        #self.display()
+        if display_after: 
+            self.display()
+            self.print_expressions()
+        #deactivate feasibility problem
+        self.deactivate_feasibility_problem()
         #create autoscaler
         autoScaler=AutoScaler(overwrite=True)
         autoScaler.scale_variables_by_magnitude(self)
         #autoScaler.scale_constraints_by_jacobian_norm(self)
-        self.deactivate_feasibility_problem()
+        print('done initializing pipeline')
+
         print(f'End Initialization Wellpad')
 
     def print_expressions(self):

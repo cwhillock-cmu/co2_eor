@@ -26,9 +26,9 @@ m.fs.node.mix.source1.flow_mass[0].fix(500)
 m.fs.node.mix.source1.pressure[0].fix(90*100000)
 m.fs.node.mix.source1.temperature[0].fix(298)
 
-#fix source2 conditions - cannot fix pressure because node enforces inlet pressure equality
 m.fs.node.mix.source2.flow_mass[0].fix(400)
 m.fs.node.mix.source2.temperature[0].fix(305)
+m.fs.node.mix.source2.pressure[0].fix(100*100000)
 
 #fix split fractions, only 2 required
 m.fs.node.split.split_fraction[0,"destination1"].fix(0.6)

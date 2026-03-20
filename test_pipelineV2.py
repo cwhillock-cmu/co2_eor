@@ -13,7 +13,7 @@ m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         )
 m.fs.pipe = pipelineV2.pipeline(
         property_package=m.fs.props,
-        length=20000,
+        length=200000,
         diameter=0.8,
         roughness=0.0475e-3,
         alpha=5,
@@ -27,9 +27,9 @@ print(idaescore.util.model_statistics.degrees_of_freedom(m))
 
 #fix degrees of freedom
 m.fs.pipe.inlet.pressure[0].fix(90*100000)
-m.fs.pipe.inlet.temperature[0].fix(313.15)
+m.fs.pipe.inlet.temperature[0].fix(353.15)
 m.fs.pipe.control_volume.properties_in[0].velocity.fix(3)
-#m.fs.pipe.inlet.flow_mass[0].fix(1200)
+#m.fs.pipe.inlet.flow_mass[0].fix()
 
 flowsheet_solver = pyo.SolverFactory("ipopt")
 #flowsheet_solver.options['nlp_scaling_method']='user-scaling'
