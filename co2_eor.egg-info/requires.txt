@@ -1,6 +1,0 @@
-pyomo
-idaes-pse
-numpy
-
-[test]
-pytest

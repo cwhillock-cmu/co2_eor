@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: co2_eor
-Version: 0.1.0
-Summary: models for co2 eor optimization
-Requires-Dist: pyomo
-Requires-Dist: idaes-pse
-Requires-Dist: numpy
-Provides-Extra: test
-Requires-Dist: pytest; extra == "test"
