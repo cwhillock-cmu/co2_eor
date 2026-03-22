@@ -239,30 +239,30 @@ m.feasibility_obj = pyo.Objective(
         )
 
 #create solver
-solver = pyo.SolverFactory('ipopt')
-solver.options['linear_solver']='ma97'
+solver1 = pyo.SolverFactory('ipopt')
+solver1.options['linear_solver']='ma97'
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=solver.solve(scaled_m,tee=True,logfile='ipopt_output.log')
+res=solver1.solve(scaled_m,tee=True,logfile='ipopt_output.log')
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 #m.display()
-m.fs.pipe1.display()
-m.fs.comp1.display()
-m.fs.pipe2.display()
-m.fs.pipe3.display()
-m.fs.comp2.display()
-m.fs.pipe4.display()
-m.fs.pipe5.display()
-m.fs.wellpad1.display()
-m.fs.wellpad1.print_expressions()
-m.fs.wellpad2.display()
-m.fs.wellpad2.print_expressions()
-m.fs.wellpad3.display()
-m.fs.wellpad3.print_expressions()
+#m.fs.pipe1.display()
+#m.fs.comp1.display()
+#m.fs.pipe2.display()
+#m.fs.pipe3.display()
+#m.fs.comp2.display()
+#m.fs.pipe4.display()
+#m.fs.pipe5.display()
+#m.fs.wellpad1.display()
+#m.fs.wellpad1.print_expressions()
+#m.fs.wellpad2.display()
+#m.fs.wellpad2.print_expressions()
+#m.fs.wellpad3.display()
+#m.fs.wellpad3.print_expressions()
 
-input("post initialization pause")
+#input("post initialization pause")
 
 #unfix variables for optimization
 
@@ -296,16 +296,31 @@ m.feasibility_obj.deactivate()
 
 #new objective function
 m.opex_obj = pyo.Objective(
-        expr= 3E-8*(m.fs.comp1.work_mechanical[0]+m.fs.comp2.work_mechanical[0])+0.04*m.fs.pipe1.inlet.flow_mass[0]-75*(m.fs.wellpad1.q_OIL_PROD+m.fs.wellpad2.q_OIL_PROD+m.fs.wellpad3.q_OIL_PROD)
+        expr= 3E-8*(m.fs.comp1.work_mechanical[0]+m.fs.comp2.work_mechanical[0])+0.040*m.fs.pipe1.inlet.flow_mass[0]-75*(m.fs.wellpad1.q_OIL_PROD+m.fs.wellpad2.q_OIL_PROD+m.fs.wellpad3.q_OIL_PROD)
         )
+
+solver2 = pyo.SolverFactory('ipopt')
+solver2.options['linear-solver']='ma97'
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=solver.solve(scaled_m,tee=True,logfile='ipopt_output.log')
+res=solver2.solve(scaled_m,tee=True,logfile='ipopt_output.log')
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 #m.display()
+
+m.fs.pipe1.print_all()
+m.fs.pipe2.print_all()
+m.fs.pipe3.print_all()
+m.fs.pipe4.print_all()
+m.fs.pipe5.print_all()
+m.fs.comp1.report()
+m.fs.comp2.report()
+m.fs.wellpad1.print_all()
+m.fs.wellpad2.print_all()
+m.fs.wellpad3.print_all()
+"""
 m.fs.pipe1.display()
 m.fs.comp1.display()
 m.fs.pipe2.display()
@@ -319,3 +334,4 @@ m.fs.wellpad2.display()
 m.fs.wellpad2.print_expressions()
 m.fs.wellpad3.display()
 m.fs.wellpad3.print_expressions()
+"""

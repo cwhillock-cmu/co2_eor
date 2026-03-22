@@ -264,7 +264,7 @@ class wellpadData(UnitModelBlockData):
         self.feasibility_objective.deactivate()
 
     def initialize(self,solver=None,tee=False,display_after=False):
-        print(f'Start Initialization Wellpad')
+        print(f'initializing {self.name}')
 
         #activate feasibility problem
         self.activate_feasibility_problem()
@@ -278,20 +278,53 @@ class wellpadData(UnitModelBlockData):
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
         if display_after: 
             self.display()
-            self.print_expressions()
+            self.print_all()
         #deactivate feasibility problem
         self.deactivate_feasibility_problem()
         #create autoscaler
         autoScaler=AutoScaler(overwrite=True)
         autoScaler.scale_variables_by_magnitude(self)
-        #autoScaler.scale_constraints_by_jacobian_norm(self)
-        print('done initializing pipeline')
+        autoScaler.scale_constraints_by_jacobian_norm(self)
 
-        print(f'End Initialization Wellpad')
+        print(f'{self.name} initialization complete')
+
+    def print_parameters(self):
+        print(f'{self.name} parameters')
+        print(f'oil volume factor: {pyo.value(self.Boi)}')
+        print(f'gas oil ratio: {pyo.value(self.GOR)}')
+        print(f'production curve fit parameter A: {pyo.value(self.PC_A)}')
+        print(f'production curve fit parameter B: {pyo.value(self.PC_B)}')
+        print(f'gas breakthrough curve fit parameter A: {pyo.value(self.GB_A)}')
+        print(f'gas breakthrough curve fit parameter B: {pyo.value(self.GB_B)}')
+        print(f'kovr: {pyo.value(self.kovr)}')
+        print(f'max BHP: {pyo.value(self.BHP_max)}')
+        print(f'multiplier: {pyo.value(self.multiplier)}')
+        print()
+
+    def print_variables(self):
+        print(f'{self.name} variables')
+        print(f'HCPV: {pyo.value(self.HCPV)}')
+        print(f'CO2 injection rate (kg/s): {pyo.value(self.inlet.flow_mass[0])}')
+        print(f'Inlet pressure: {pyo.value(self.inlet.pressure[0])/100000}')
+        print(f'Inlet temperature: {pyo.value(self.inlet.temperature[0])}')
+        print(f'Injection pressure: {pyo.value(self.control_volume.injection_state.pressure)/100000}')
+        print(f'Injection temperature: {pyo.value(self.control_volume.injection_state.temperature)}')
+        print(f'Reservoir pressure: {pyo.value(self.reservoir_state.pressure[0])/100000}')
+        print(f'Reservoir temperature: {pyo.value(self.reservoir_state.temperature[0])}')
+        print()
+
 
     def print_expressions(self):
-        print(f'correction factor={pyo.value(self.correction_factor)}')
-        print(f'q_OIL_PROD={pyo.value(self.q_OIL_PROD)}')
-        print(f'q_GAS_PROD={pyo.value(self.q_GAS_PROD)}')
-        print(f'q_CO2_BRKTH={pyo.value(self.q_CO2_BRKTH)}')
+        print(f'{self.name} expressions')
+        print(f'correction factor: {pyo.value(self.correction_factor)}')
+        print(f'oil production rate: {pyo.value(self.q_OIL_PROD)}')
+        print(f'gas production rate: {pyo.value(self.q_GAS_PROD)}')
+        print(f'CO2 breakthrough rate: {pyo.value(self.q_CO2_BRKTH)}')
+        print()
+
+    def print_all(self):
+        print()
+        self.print_parameters()
+        self.print_variables()
+        self.print_expressions()
 

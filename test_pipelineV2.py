@@ -13,7 +13,7 @@ m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         )
 m.fs.pipe = pipelineV2.pipeline(
         property_package=m.fs.props,
-        length=200000,
+        length=150000,
         diameter=0.8,
         roughness=0.0475e-3,
         alpha=5,
@@ -28,26 +28,36 @@ print(idaescore.util.model_statistics.degrees_of_freedom(m))
 #fix degrees of freedom
 m.fs.pipe.inlet.pressure[0].fix(90*100000)
 m.fs.pipe.inlet.temperature[0].fix(353.15)
-m.fs.pipe.control_volume.properties_in[0].velocity.fix(3)
-#m.fs.pipe.inlet.flow_mass[0].fix()
+#m.fs.pipe.control_volume.properties_in[0].velocity.fix(3)
+m.fs.pipe.inlet.flow_mass[0].fix(40)
 
-flowsheet_solver = pyo.SolverFactory("ipopt")
-#flowsheet_solver.options['nlp_scaling_method']='user-scaling'
-flowsheet_solver.options['linear_solver']='ma97'
+flowsheet_solver = pyo.SolverFactory("bonmin")
+#flowsheet_solver.options['linear_solver']='ma97'
+print(flowsheet_solver.options)
 
 m.fs.pipe.initialize(solver=flowsheet_solver,tee=True,display_after=True)
 
 m.obj = pyo.Objective(expr=m.fs.pipe.Pdrop/100000)
-flowsheet_solver.options['nlp_scaling_method']='user-scaling'
-res = flowsheet_solver.solve(m,tee=True)
+
+#scale model
+scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
+#solve flowsheet
+res=flowsheet_solver.solve(scaled_m,tee=True,logfile='ipopt_output.log')
+#unscale model
+pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
+
+"""
 m.display()
-m.fs.pipe.print_expressions()
+m.fs.pipe.print_all()
 print(pyo.value(m.fs.pipe.control_volume.properties_avg.cp_mass))
 print(pyo.value(m.fs.pipe.control_volume.properties_avg.dens_mass))
 print(pyo.value(m.fs.pipe.control_volume.properties_avg.visc_d_phase["Vap"]))
 print(pyo.value(m.fs.pipe.control_volume.properties_avg.mw))
 print()
 print(pyo.value(m.fs.pipe.control_volume.properties_out[0].dens_mass))
+print(m.fs.pipe.name)
+"""
+m.fs.pipe.print_all()
 """
 inlet_temp_list=[20,25,30,35,40,45,50,55,60]
 pressure_drop_list = []

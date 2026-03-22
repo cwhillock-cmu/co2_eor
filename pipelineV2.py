@@ -311,7 +311,7 @@ class pipelineData(UnitModelBlockData):
         self.feasibility_objective.deactivate()
 
     def initialize(self,solver=None,tee=False,display_after=False):
-        print('initializing pipeline')
+        print(f'initializing {self.name}')
         #initialize outlet variables as inlet variables
         self.outlet.pressure[0].value = self.inlet.pressure[0].value*0.98
         self.control_volume.properties_avg.pressure.value = self.inlet.pressure[0].value *0.99
@@ -330,22 +330,55 @@ class pipelineData(UnitModelBlockData):
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
         if display_after: 
             self.display()
-            self.print_expressions()
+            self.print_all()
         #deactivate feasibility problem
         self.deactivate_feasibility_problem()
         #create autoscaler
         autoScaler=AutoScaler(overwrite=True)
         autoScaler.scale_variables_by_magnitude(self)
-        #autoScaler.scale_constraints_by_jacobian_norm(self)
-        print('done initializing pipeline')
+        autoScaler.scale_constraints_by_jacobian_norm(self)
+        print(f'{self.name} initialization complete')
+
+    def print_parameters(self):
+        print(f'{self.name} parameters')
+        print(f'length: {pyo.value(self.length)} m')
+        print(f'diameter: {pyo.value(self.diameter)} m')
+        print(f'roughness: {pyo.value(self.roughness)} m')
+        print(f'heat transfer coefficient: {pyo.value(self.alpha)} W/m2*K')
+        print(f'ambient temperature: {pyo.value(self.ambient_temperature)} K')
+        print()
+
+    def print_variables(self):
+        print(f'{self.name} variables')
+        print(f'Flowrate: {pyo.value(self.inlet.flow_mass[0])} kg/s')
+        print(f'Inlet Pressure: {pyo.value(self.inlet.pressure[0])/100000} bar')
+        print(f'Inlet Temperature: {pyo.value(self.inlet.temperature[0])} K')
+        print(f'Inlet Velocity: {pyo.value(self.control_volume.properties_in[0].velocity)} m/s')
+        print(f'Outlet Pressure: {pyo.value(self.outlet.pressure[0])/100000} bar')
+        print(f'Outlet Temperature: {pyo.value(self.outlet.temperature[0])} K')
+        print(f'Outlet Velocity: {pyo.value(self.control_volume.properties_out[0].velocity)} m/s')
+        print(f'Average Pressure: {pyo.value(self.control_volume.properties_avg.pressure)/100000} bar')
+        print(f'Average Temperature: {pyo.value(self.control_volume.properties_avg.temperature)} K')
+        print(f'Average Viscosity: {pyo.value(self.control_volume.properties_avg.visc_d_phase["Vap"])} Pa*s')
+        print(f'Average Heat Capacity: {pyo.value(self.control_volume.properties_avg.cp_mass)} J/kg')
+        print()
+
 
     def print_expressions(self):
-        print(f'Average Velocity:{pyo.value(self.control_volume.properties_avg.velocity)}')
-        print(f'Inlet PD ratio:{pyo.value(self.control_volume.properties_in[0].PD_ratio)}')
-        print(f'Outlet PD ratio:{pyo.value(self.control_volume.properties_out[0].PD_ratio)}')
-        print(f'Average PD ratio:{pyo.value(self.control_volume.properties_avg.PD_ratio)}')
-        print(f'Average q:{pyo.value(self.control_volume.properties_avg.q)}')
-        print(f'Average Re:{pyo.value(self.control_volume.properties_avg.Re)}')
-        print(f'Average f:{pyo.value(self.control_volume.properties_avg.f)}')
-        print(f'Pressure Drop:{pyo.value(self.Pdrop)}')
+        print(f'{self.name} expressions')
+        print(f'Average Velocity: {pyo.value(self.control_volume.properties_avg.velocity)} m/s')
+        print(f'Inlet PD ratio: {pyo.value(self.control_volume.properties_in[0].PD_ratio)} J')
+        print(f'Outlet PD ratio: {pyo.value(self.control_volume.properties_out[0].PD_ratio)} J')
+        print(f'Average PD ratio: {pyo.value(self.control_volume.properties_avg.PD_ratio)} J')
+        print(f'Average q: {pyo.value(self.control_volume.properties_avg.q)} W/m2')
+        print(f'Average Re: {pyo.value(self.control_volume.properties_avg.Re)}')
+        print(f'Average f: {pyo.value(self.control_volume.properties_avg.f)} J')
+        print(f'Pressure Drop: {pyo.value(self.Pdrop)/100000} bar')
+        print()
+
+    def print_all(self):
+        print()
+        self.print_parameters()
+        self.print_variables()
+        self.print_expressions()
 
