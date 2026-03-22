@@ -4,9 +4,7 @@ import idaes.core
 import idaes.logger as idaeslog
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
 import idaes.models.unit_models.pressure_changer as idaesPressureChanger
-from pipelineV2 import pipeline
-from wellpad import wellpad
-from node import node
+from co2_eor import wellpad
 from pyomo.network import Arc
 import numpy as np
 

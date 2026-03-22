@@ -2,7 +2,7 @@ import pyomo.environ as pyo
 import idaes.core as idaescore
 import pyomo.util as pyoutil
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
-import pipelineV2
+from co2_eor import pipeline
 
 #test block
 m = pyo.ConcreteModel()

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "co2_eor"
+version = "0.1.0"
+description = "models for co2 eor optimization"
+dependencies = [
+    "pyomo",
+    "idaes-pse",
+    "numpy",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
