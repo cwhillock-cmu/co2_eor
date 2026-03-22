@@ -152,7 +152,8 @@ def add_equations(unit,config):
 
     #average pressure density ratio
     average.PD_ratio = pyo.Expression(expr=
-        (inlet.PD_ratio+outlet.PD_ratio)/2
+        average.pressure/average.dens_mass
+        #(inlet.PD_ratio+outlet.PD_ratio)/2
         )
 
     #ambient heat loss
@@ -259,7 +260,6 @@ def guess_scales(unit):
     set_scaling_factor(average.temperature,1e-2)
     set_scaling_factor(average.mw,1e2)
     set_scaling_factor(average.visc_d_phase["Vap"],1e6)
-    set_scaling_factor(average.cp_mass,1e-4)
 
     #equality constraint scaling factors
     set_scaling_factor(unit.mass_bal,1e-2)
@@ -360,7 +360,6 @@ class pipelineData(UnitModelBlockData):
         print(f'Average Pressure: {pyo.value(self.control_volume.properties_avg.pressure)/100000} bar')
         print(f'Average Temperature: {pyo.value(self.control_volume.properties_avg.temperature)} K')
         print(f'Average Viscosity: {pyo.value(self.control_volume.properties_avg.visc_d_phase["Vap"])} Pa*s')
-        print(f'Average Heat Capacity: {pyo.value(self.control_volume.properties_avg.cp_mass)} J/kg')
         print()
 
 
@@ -381,4 +380,5 @@ class pipelineData(UnitModelBlockData):
         self.print_parameters()
         self.print_variables()
         self.print_expressions()
+
 
