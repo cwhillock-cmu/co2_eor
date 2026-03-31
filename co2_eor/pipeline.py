@@ -1,6 +1,7 @@
 #Pipeline V2 Model
 
 import pyomo.environ as pyo
+from pyomo.environ import units
 from pyomo.common.config import ConfigBlock, ConfigValue, In
 from idaes.core import (
     ControlVolume0DBlock,
@@ -45,11 +46,18 @@ def make_pipeline_config_block(config):
             )
     config.declare(
             "alpha", #ambient heat transfer coefficient
-            ConfigValue(default=5,domain=float)
+            ConfigValue(default=0,domain=float)
             )
     config.declare(
             "ambient_temperature",
             ConfigValue(default=300,domain=float)
+            )
+    config.declare("temperature_weight",
+            ConfigValue(default=0,domain=float)
+            )
+    config.declare(
+            "height_change",
+            ConfigValue(default=0,domain=float)
             )
     config.declare(
             "average_pressure_type",
@@ -78,13 +86,22 @@ def make_control_volume(unit,name,config):
 
 #adding parameters from config
 def add_params(unit,config):
-    unit.length = pyo.Param(initialize=config.length) #m
-    unit.diameter = pyo.Param(initialize=config.diameter) #m
-    unit.roughness = pyo.Param(initialize=config.roughness) #m
-    unit.area = pyo.Param(initialize=3.1415926*unit.diameter**2/4) #m^2
-    unit.R = pyo.Param(initialize=8.314462) #m^3*Pa*K^{-1}*mol^{-1}
-    unit.alpha = pyo.Param(initialize=config.alpha) #W/m^2K
-    unit.ambient_temperature = pyo.Param(initialize=config.ambient_temperature) #K
+    unit.length = pyo.Param(initialize=config.length, units=units.m) #m
+    #unit.diameter = pyo.Param(initialize=config.diameter, units=units.m) #m
+    #unit.roughness = pyo.Param(initialize=config.roughness, units=units.m) #m
+    #unit.area = pyo.Param(initialize=3.1415926*unit.diameter**2/4, units=units.m**2) #m^2
+    unit.R = pyo.Param(initialize=8.314462, units=units.m**3*units.Pa/units.K/units.mol) #m^3*Pa*K^{-1}*mol^{-1}
+    unit.alpha = pyo.Param(initialize=config.alpha, units=units.W/units.m**2/units.K) #W/m^2K
+    unit.ambient_temperature = pyo.Param(initialize=config.ambient_temperature, units=units.K) #K
+    unit.temperature_weight = pyo.Param(initialize=config.temperature_weight)
+    unit.g = pyo.Param(initialize=9.80665, units=units.m/units.s**2) #m/s^2
+    unit.height_change = pyo.Param(initialize=config.height_change, units=units.m) #m
+
+def add_variables(unit,config):
+    #diameter variable
+    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,5), units=units.m)
+    unit.roughness = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,0.1), units=units.m)
+    unit.area = pyo.Expression(expr=3.1415926*unit.diameter**2/4)
     
 #adding variables and constraints
 def add_equations(unit,config):
@@ -105,8 +122,8 @@ def add_equations(unit,config):
     
     #create velocity variables
     #inlet velocity 
-    inlet.velocity = pyo.Var(domain=pyo.NonNegativeReals)
-    outlet.velocity = pyo.Var(domain=pyo.NonNegativeReals)
+    inlet.velocity = pyo.Var(domain=pyo.NonNegativeReals, units=units.m/units.s)
+    outlet.velocity = pyo.Var(domain=pyo.NonNegativeReals, units=units.m/units.s)
 
     #"easy" equality constraints/expressions
     
@@ -137,7 +154,7 @@ def add_equations(unit,config):
 
     #average temperature 5
     unit.average_temperature = pyo.Constraint(expr=
-        average.temperature*2==inlet.temperature+outlet.temperature
+        average.temperature==unit.temperature_weight*inlet.temperature+(1-unit.temperature_weight)*outlet.temperature
         )
 
     #inlet pressure density ratio
@@ -158,14 +175,14 @@ def add_equations(unit,config):
 
     #ambient heat loss
     average.q = pyo.Expression(expr=
-        unit.alpha*(unit.ambient_temperature-outlet.temperature)
+        unit.alpha*(unit.ambient_temperature-average.temperature)
         )
 
     #"difficult" constraints/expressions
 
     #average pressure 6
     unit.constant_average_pressure = pyo.Constraint(expr=
-        average.pressure==inlet.pressure +unit.spos[1]-unit.sneg[1]
+        average.pressure==inlet.pressure + unit.spos[1]-unit.sneg[1]
         )
     unit.constant_average_pressure.deactivate()
     unit.linear_average_pressure = pyo.Constraint(expr=
@@ -185,7 +202,7 @@ def add_equations(unit,config):
 
     #average reynolds number
     average.Re = pyo.Expression(expr=
-        smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Vap"]) +unit.spos[4]-unit.sneg[4]
+        smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]) +unit.spos[4]-unit.sneg[4]
         )
 
     #average friction factor
@@ -195,12 +212,12 @@ def add_equations(unit,config):
 
     #hydraulic equation 7
     unit.hydraulic = pyo.Constraint(expr=
-        (inlet.pressure**2-outlet.pressure**2)/(2*average.dens_mass**2*average.velocity**2)==average.PD_ratio*average.f/2*unit.length/unit.diameter+average.PD_ratio*safe_log(inlet.pressure/outlet.pressure)-(inlet.PD_ratio-outlet.PD_ratio) +unit.spos[6]-unit.sneg[6]
+        (inlet.pressure**2-outlet.pressure**2)/(2*average.dens_mass**2*average.velocity**2)==average.PD_ratio*average.f/2*unit.length/unit.diameter+average.PD_ratio*safe_log(inlet.pressure/outlet.pressure)-(inlet.PD_ratio-outlet.PD_ratio)+average.pressure*unit.g*unit.height_change/average.dens_mass/average.velocity**2 +unit.spos[6]-unit.sneg[6]
         )
     
     #heat balance 8
     unit.isothermal_inlet = pyo.Constraint(expr=
-        inlet.temperature==outlet.temperature+unit.spos[7]-unit.sneg[7]
+        inlet.temperature==outlet.temperature+(unit.spos[7]-unit.sneg[7])
         )
     unit.isothermal_inlet.deactivate()
     unit.nonisothermal = pyo.Constraint(expr=
@@ -218,17 +235,20 @@ def add_equations(unit,config):
     else:
         unit.isothermal_inlet.activate()
 
-    #inequality constraints
+    #auxiliary constraints
 
     #pressure bound
-    unit.outlet_pressure_max = pyo.Constraint(
-            expr=outlet.pressure<=inlet.pressure
+    #unit.outlet_pressure_min = pyo.Constraint(
+    #        expr=outlet.pressure>=74*100000
+    #        )
+    #unit.inlet_pressure_min = pyo.Constraint(
+    #        expr=inlet.pressure>=74*100000
+    #        )
+    unit.outlet_supercritical = pyo.Constraint(
+            expr=outlet.temperature_sat>=outlet.temperature_crit
             )
-    unit.outlet_pressure_min = pyo.Constraint(
-            expr=outlet.pressure>=74*100000
-            )
-    unit.inlet_pressure_min = pyo.Constraint(
-            expr=inlet.pressure>=74*100000
+    unit.inlet_supercritical = pyo.Constraint(
+            expr=inlet.temperature_sat>=inlet.temperature_crit
             )
 
     #auxiliary expressions
@@ -244,7 +264,6 @@ def guess_scales(unit):
     set_scaling_factor(unit.diameter,1e1)
     set_scaling_factor(unit.length,1e-3)
     set_scaling_factor(unit.roughness,1e2)
-    set_scaling_factor(unit.area,1e1)
     set_scaling_factor(unit.ambient_temperature,1e-2)
     set_scaling_factor(inlet.flow_mass,1e-2)
     set_scaling_factor(outlet.flow_mass,1e-2)
@@ -259,7 +278,7 @@ def guess_scales(unit):
     set_scaling_factor(outlet.temperature,1e-2)
     set_scaling_factor(average.temperature,1e-2)
     set_scaling_factor(average.mw,1e2)
-    set_scaling_factor(average.visc_d_phase["Vap"],1e6)
+    set_scaling_factor(average.visc_d_phase["Liq"],1e6)
 
     #equality constraint scaling factors
     set_scaling_factor(unit.mass_bal,1e-2)
@@ -273,9 +292,11 @@ def guess_scales(unit):
     set_scaling_factor(unit.nonisothermal,1e-2)
     set_scaling_factor(unit.isothermal_ambient,1e-2)
     
-    #inequality constraint scaling factors
-    set_scaling_factor(unit.outlet_pressure_max,1e-7)
-    set_scaling_factor(unit.outlet_pressure_min,1e-7)
+    #auxiliary constraint scaling factors
+    #set_scaling_factor(unit.outlet_pressure_min,1e-7)
+    #set_scaling_factor(unit.inlet_pressure_min,1e-7)
+    set_scaling_factor(unit.inlet_supercritical,1e-2)
+    set_scaling_factor(unit.outlet_supercritical,1e-2)
 
     
 #define pipeline class
@@ -289,6 +310,7 @@ class pipelineData(UnitModelBlockData):
         make_control_volume(self,"control_volume",self.config)
 
         add_params(self,self.config)
+        add_variables(self,self.config)
         add_equations(self,self.config)
         guess_scales(self)
         self.add_inlet_port(block=self.control_volume.properties_in,name="inlet")
@@ -346,6 +368,7 @@ class pipelineData(UnitModelBlockData):
         print(f'roughness: {pyo.value(self.roughness)} m')
         print(f'heat transfer coefficient: {pyo.value(self.alpha)} W/m2*K')
         print(f'ambient temperature: {pyo.value(self.ambient_temperature)} K')
+        print(f'height change: {pyo.value(self.height_change)} m')
         print()
 
     def print_variables(self):
@@ -359,7 +382,7 @@ class pipelineData(UnitModelBlockData):
         print(f'Outlet Velocity: {pyo.value(self.control_volume.properties_out[0].velocity)} m/s')
         print(f'Average Pressure: {pyo.value(self.control_volume.properties_avg.pressure)/100000} bar')
         print(f'Average Temperature: {pyo.value(self.control_volume.properties_avg.temperature)} K')
-        print(f'Average Viscosity: {pyo.value(self.control_volume.properties_avg.visc_d_phase["Vap"])} Pa*s')
+        print(f'Average Viscosity: {pyo.value(self.control_volume.properties_avg.visc_d_phase["Liq"])} Pa*s')
         print()
 
 

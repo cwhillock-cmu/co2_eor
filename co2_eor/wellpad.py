@@ -1,3 +1,5 @@
+#wellpad model V2
+
 import pyomo.environ as pyo
 from pyomo.common.config import ConfigBlock, ConfigValue, In
 from idaes.core import (
@@ -14,6 +16,8 @@ from idaes.core.util.config import is_physical_parameter_block
 from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.model_statistics import degrees_of_freedom
+from pyomo.network import Arc
+from co2_eor import pipeline
 
 #specify configuration options
 def make_wellpad_config_block(config):
@@ -71,11 +75,27 @@ def make_wellpad_config_block(config):
             )
     config.declare(
             "BHP_max",
-            ConfigValue(default=300*100000,domain=float)#maximum injection pressure
+            ConfigValue(default=1000*100000,domain=float)#maximum injection pressure
             )
     config.declare(
             "multiplier",
             ConfigValue(default=1,domain=int) #flow multiplier
+            )
+    config.declare(
+            "use_wellbore_pipe_model",
+            ConfigValue(default=False,domain=bool)
+            )
+    config.declare(
+            "depth",
+            ConfigValue(default=1000,domain=float) #reservoir depth
+            )
+    config.declare(
+            "wellbore_diameter",
+            ConfigValue(default=0.076,domain=float) #wellbore diameter
+            )
+    config.declare(
+            "wellbore_roughness",
+            ConfigValue(default=0.0475e-3,domain=float) #wellbore roughness
             )
     config.declare(
             "property_package_args",
@@ -126,43 +146,80 @@ def add_equations(unit,name,config):
     #define HCPV
     unit.HCPV = pyo.Var(domain=pyo.NonNegativeReals)
 
+    unit.wellbore_connection_constraints = pyo.ConstraintList()
+    #connect inlet state and injection state
+    if config.use_wellbore_pipe_model:
+        unit.wellbore = pipeline(
+                property_package=config.property_package,
+                length=config.depth,
+                height_change=-config.depth,
+                average_pressure_type='linear',
+                heat_balance_type='inlet',
+                )
+        unit.wellbore.diameter.fix(config.wellbore_diameter)
+        unit.wellbore.roughness.fix(config.wellbore_roughness)
+
+        #manually add constraints to connect wellpad states to pipe states
+        unit.wellbore_connection_constraints.add(
+                expr=inlet.flow_mass==unit.wellbore.control_volume.properties_in[0].flow_mass*unit.multiplier
+                )
+        unit.wellbore_connection_constraints.add(
+                expr=inlet.temperature==unit.wellbore.control_volume.properties_in[0].temperature
+                )
+        unit.wellbore_connection_constraints.add(
+                expr=inlet.pressure==unit.wellbore.control_volume.properties_in[0].pressure
+                )
+        unit.wellbore_connection_constraints.add(
+                expr=injection_state.flow_mass==unit.wellbore.control_volume.properties_out[0].flow_mass
+                )
+        unit.wellbore_connection_constraints.add(
+                expr=injection_state.temperature==unit.wellbore.control_volume.properties_out[0].temperature
+                )
+        unit.wellbore_connection_constraints.add(
+                expr=injection_state.pressure==unit.wellbore.control_volume.properties_out[0].pressure
+                )
+    else:
+        #different constraints if not using wellbore block
+        unit.wellbore_connection_constraints.add(
+                expr=inlet.flow_mass==injection_state.flow_mass*unit.multiplier
+                )
+        unit.wellbore_connection_constraints.add(
+                expr=inlet.temperature==injection_state.temperature
+                )
+        unit.wellbore_connection_constraints.add(
+                expr=inlet.pressure==injection_state.pressure
+                )
+
     #create slack variables for initialization
-    num_slacks=6
+    num_slacks=3
     unit.spos = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.sneg = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.spos.fix(0)
     unit.sneg.fix(0)
     #create feasibility expression and objective function
-    unit.feasibility_expression = pyo.Expression(expr=pyo.quicksum(unit.spos[i]+unit.sneg[i] for i in range(1,num_slacks+1)))
+    if config.use_wellbore_pipe_model:
+        unit.feasibility_expression = pyo.Expression(expr=pyo.quicksum(unit.spos[i]+unit.sneg[i] for i in range(1,num_slacks+1))+unit.wellbore.feasibility_expression)
+    else:
+        unit.feasibility_expression = pyo.Expression(expr=pyo.quicksum(unit.spos[i]+unit.sneg[i] for i in range(1,num_slacks+1)))
     unit.feasibility_objective = pyo.Objective(expr=unit.feasibility_expression)
     unit.feasibility_objective.deactivate()
 
     #equality constraints
-    #mass balance between injection state and inlet state
-    unit.mass_bal_constraint1 = pyo.Constraint(
-            expr=inlet.flow_mass==injection_state.flow_mass*unit.multiplier +unit.spos[1]-unit.sneg[1]
-            ) #constraint 1
+
+
     #mass balance between injection state and reservoir state
-    unit.mass_bal_constraint2 = pyo.Constraint(
-            expr=injection_state.flow_mass==reservoir_state.flow_mass +unit.spos[2]-unit.sneg[2]
-            ) #constraint 2
-    #isothermal wellbore constraint
-    unit.isothermal_constraint = pyo.Constraint(
-            expr=inlet.temperature==injection_state.temperature +unit.spos[3]-unit.sneg[3]
-            ) #constraint 3
-    #for now, BHP is equal to inlet pressure
-    unit.pressure_drop_constraint = pyo.Constraint(
-            expr=inlet.pressure==injection_state.pressure +unit.spos[4]-unit.sneg[4]
-            ) #constraint 4
+    unit.mass_bal = pyo.Constraint(
+            expr=injection_state.flow_mass==reservoir_state.flow_mass +unit.spos[1]-unit.sneg[1]
+            ) #constraint 1
 
     #CO2 Injection Rate RB/s
     unit.q_CO2_INJ = pyo.Var(domain=pyo.NonNegativeReals)
     #calculate injection rate
     unit.injection_rate_from_density_constraint = pyo.Constraint(
-            expr=unit.q_CO2_INJ==injection_state.flow_mass/injection_state.dens_mass*6.29 +unit.spos[5]-unit.sneg[5]
+            expr=unit.q_CO2_INJ==injection_state.flow_mass/injection_state.dens_mass*6.29 +unit.spos[2]-unit.sneg[2]
             ) #constraint 3
     unit.injection_rate_from_darcys_law_constraint = pyo.Constraint(
-            expr=unit.q_CO2_INJ==unit.kovr/reservoir_state.visc_d_phase["Vap"]*(injection_state.pressure-reservoir_state.pressure) +unit.spos[6]-unit.sneg[6]
+            expr=unit.q_CO2_INJ==unit.kovr/reservoir_state.visc_d_phase["Liq"]*(injection_state.pressure-reservoir_state.pressure) +unit.spos[3]-unit.sneg[3]
             ) #constraint 4
 
     #sensitivity curve correction factor
@@ -197,7 +254,6 @@ def add_equations(unit,name,config):
             expr=injection_state.pressure>=reservoir_state.pressure
             )
 
-
 def guess_scales(unit,name,config):
     inlet=unit.control_volume.properties_in[0]
     injection_state=unit.control_volume.injection_state
@@ -221,10 +277,7 @@ def guess_scales(unit,name,config):
     set_scaling_factor(inlet.flow_mass,1e1)
     set_scaling_factor(reservoir_state.flow_mass,1e1)
     set_scaling_factor(injection_state.flow_mass,1e1)
-    set_scaling_factor(unit.mass_bal_constraint1,1e1)
-    set_scaling_factor(unit.mass_bal_constraint2,1e1)
-    set_scaling_factor(unit.isothermal_constraint,1e-2)
-    set_scaling_factor(unit.pressure_drop_constraint,1e-7)
+    set_scaling_factor(unit.mass_bal,1e1)
     set_scaling_factor(unit.q_CO2_INJ,1e3)
     set_scaling_factor(unit.injection_rate_from_density_constraint,1e3)
     set_scaling_factor(unit.injection_rate_from_darcys_law_constraint,1e3)
@@ -250,10 +303,16 @@ class wellpadData(UnitModelBlockData):
     def activate_slack_variables(self):
         self.spos.unfix()
         self.sneg.unfix()
+        if self.config.use_wellbore_pipe_model:
+            self.wellbore.spos.unfix()
+            self.wellbore.sneg.unfix()
 
     def deactivate_slack_variables(self):
         self.spos.fix(0)
         self.sneg.fix(0)
+        if self.config.use_wellbore_pipe_model:
+            self.wellbore.spos.fix(0)
+            self.wellbore.sneg.fix(0)
 
     def activate_feasibility_problem(self):
         self.activate_slack_variables()

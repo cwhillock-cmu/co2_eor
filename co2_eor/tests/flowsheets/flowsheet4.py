@@ -12,7 +12,7 @@ m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)
 m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         pure_component="CO2",amount_basis=idaesHelmholtz.AmountBasis.MASS,
-        state_vars=idaesHelmholtz.StateVars.TPX,phase_presentation=idaesHelmholtz.PhaseType.G,
+        state_vars=idaesHelmholtz.StateVars.TPX,phase_presentation=idaesHelmholtz.PhaseType.L,
         #has_phase_equilibrium=False,
         )
 
@@ -291,11 +291,12 @@ m.feasibility_obj.deactivate()
 
 #new objective function
 m.opex_obj = pyo.Objective(
-        expr= 3E-8*(m.fs.comp1.work_mechanical[0]+m.fs.comp2.work_mechanical[0])+0.040*m.fs.pipe1.inlet.flow_mass[0]-75*(m.fs.wellpad1.q_OIL_PROD+m.fs.wellpad2.q_OIL_PROD+m.fs.wellpad3.q_OIL_PROD)
+        expr= 3E-8*(m.fs.comp1.work_mechanical[0]+m.fs.comp2.work_mechanical[0])+0.050*m.fs.pipe1.inlet.flow_mass[0]-75*(m.fs.wellpad1.q_OIL_PROD+m.fs.wellpad2.q_OIL_PROD+m.fs.wellpad3.q_OIL_PROD)
         )
 
 solver2 = pyo.SolverFactory('ipopt')
 solver2.options['linear_solver']='ma97'
+solver2.options['tol']=1E-6
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)

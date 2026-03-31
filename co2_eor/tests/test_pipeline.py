@@ -1,6 +1,7 @@
 import pyomo.environ as pyo
 import idaes.core as idaescore
 import pyomo.util as pyoutil
+from pyomo.util.check_units import assert_units_consistent
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
 from co2_eor import pipeline
 
@@ -11,20 +12,21 @@ m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         pure_component="CO2",amount_basis=idaesHelmholtz.AmountBasis.MASS,
         state_vars=idaesHelmholtz.StateVars.TPX,phase_presentation=idaesHelmholtz.PhaseType.G
         )
-m.fs.pipe = pipeline.pipeline(
+m.fs.pipe = pipeline(
         property_package=m.fs.props,
         length=20000,
         diameter=0.8,
         roughness=0.0475e-3,
         )
 
-print(idaescore.util.model_statistics.degrees_of_freedom(m))
-
 #fix degrees of freedom
 m.fs.pipe.inlet.pressure[0].fix(90*100000)
 m.fs.pipe.inlet.temperature[0].fix(293.15)
 m.fs.pipe.control_volume.properties_in[0].velocity.fix(3)
 #m.fs.pipe.inlet.flow_mass[0].fix(1.575)
+
+assert idaescore.util.model_statistics.degrees_of_freedom(m)==0
+
 m.fs.pipe.initialize(solver='ipopt',tee=True)
 m.display()
 m.fs.pipe.print_expressions()

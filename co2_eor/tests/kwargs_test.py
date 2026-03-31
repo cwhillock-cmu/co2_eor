@@ -9,35 +9,35 @@ m = pyo.ConcreteModel()
 m.fs = idaescore.FlowsheetBlock(dynamic=False)
 m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         pure_component="CO2",amount_basis=idaesHelmholtz.AmountBasis.MASS,
-        state_vars=idaesHelmholtz.StateVars.TPX,phase_presentation=idaesHelmholtz.PhaseType.L
-        )
-m.fs.pipe = pipeline(
-        property_package=m.fs.props,
-        length=20000,
-        alpha=5,
-        ambient_temperature=293.15,
-        average_pressure_type='nonlinear',
-        heat_balance_type='inlet',
-        temperature_weight=0.333,
-        height_change=0,
+        state_vars=idaesHelmholtz.StateVars.TPX,phase_presentation=idaesHelmholtz.PhaseType.G
         )
 
+config_dict = {
+        "property_package":m.fs.props,
+        "length":20000,
+        "alpha":5,
+        "ambient_temperature":293.15,
+        "average_pressure_type":'nonlinear',
+        "heat_balance_type":'nonisothermal',
+        "temperature_weight":0.333,
+        }
+m.fs.pipe = pipeline(**config_dict)
+
+
 #m.fs.pipe.pprint()
-m.fs.pipe.inlet_supercritical.deactivate()
-m.fs.pipe.outlet_supercritical.deactivate()
 
 #fix degrees of freedom
 m.fs.pipe.diameter.fix(0.8)
 m.fs.pipe.roughness.fix(0.0475e-3)
 m.fs.pipe.inlet.pressure[0].fix(90*100000)
-m.fs.pipe.inlet.temperature[0].fix(293.15)
+m.fs.pipe.inlet.temperature[0].fix(323.15)
 m.fs.pipe.control_volume.properties_in[0].velocity.fix(3)
-#m.fs.pipe.inlet.flow_mass[0].fix(9)
+#m.fs.pipe.inlet.flow_mass[0].fix(40)
 
 assert idaescore.util.model_statistics.degrees_of_freedom(m)==0
 
-flowsheet_solver = pyo.SolverFactory("ipopt")
-flowsheet_solver.options['linear_solver']='ma97'
+flowsheet_solver = pyo.SolverFactory("bonmin")
+#flowsheet_solver.options['linear_solver']='ma97'
 print(flowsheet_solver.options)
 
 m.fs.pipe.initialize(solver=flowsheet_solver,tee=True,display_after=True)
