@@ -4,7 +4,10 @@ import idaes.core
 import idaes.logger as idaeslog
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
 import idaes.models.unit_models.pressure_changer as idaesPressureChanger
-from co2_eor import pipeline, wellpad,node
+from idaes.core import MomentumBalanceType
+from co2_eor.splitter import EnergySplittingType
+from co2_eor.mixer import MomentumMixingType
+from co2_eor import pipeline, wellpad, mixer,splitter
 from pyomo.network import Arc
 
 #model, flowsheet, and parameter block
@@ -16,164 +19,211 @@ m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         #has_phase_equilibrium=False,
         )
 
+compressor_config = {
+        "property_package": m.fs.props,
+        "dynamic":False,
+        "compressor":True,
+        "thermodynamic_assumption":idaesPressureChanger.ThermodynamicAssumption.isentropic,
+        }
+
+pipeline_config = {
+        "property_package":m.fs.props,
+        "alpha":5,
+        "ambient_temperature":293.15,
+        "average_pressure_type":'linear',
+        "heat_balance_type":'nonisothermal',
+        "average_weight":0,
+        "height_change":0,
+        }
+
+mixer_config = {
+        "property_package":m.fs.props,
+        "momentum_mixing_type":MomentumMixingType.inequality
+        }
+
+splitter_config = {
+        "property_package":m.fs.props,
+        "ideal_separation":False,
+        "energy_split_basis":EnergySplittingType.equal_molar_enthalpy,
+        "momentum_balance_type":MomentumBalanceType.none,
+        }
+
+welltype1_config = {
+        "property_package":m.fs.props,
+        "temperature":306,
+        "pressure":140*100000,
+        "Boi":1.2,
+        "GOR":0.6,
+        "PC_A":0.4,
+        "PC_B":0.6,
+        "GB_A":0.62,
+        "GB_B":1.12,
+        "kovr":1.5E-14,
+        "use_correction_factor":False,
+        "BHP_max":300*100000,
+        "multiplier":20,
+        "use_wellbore_pipe_model":False,
+        "depth":1000,
+        "wellbore_diameter":0.076,
+        "wellbore_roughness":0.0475e-3,
+        }
+
+welltype2_config = {
+        "property_package":m.fs.props,
+        "temperature":295,
+        "pressure":150*100000,
+        "Boi":1.3,
+        "GOR":0.7,
+        "PC_A":0.3,
+        "PC_B":0.5,
+        "GB_A":0.53,
+        "GB_B":1.18,
+        "kovr":8.7E-15,
+        "use_correction_factor":False,
+        "BHP_max":320*100000,
+        "multiplier":20,
+        "use_wellbore_pipe_model":False,
+        "depth":1000,
+        "wellbore_diameter":0.076,
+        "wellbore_roughness":0.0475e-3,
+        }
+
+welltype3_config={
+        "property_package":m.fs.props,
+        "temperature":340,
+        "pressure":120*100000,
+        "Boi":1.4,
+        "GOR":0.75,
+        "PC_A":0.25,
+        "PC_B":0.3,
+        "GB_A":0.67,
+        "GB_B":1.21,
+        "kovr":5.5E-15,
+        "use_correction_factor":False,
+        "BHP_max":340*100000,
+        "multiplier":20,
+        "use_wellbore_pipe_model":False,
+        "depth":1000,
+        "wellbore_diameter":0.076,
+        "wellbore_roughness":0.0475e-3,
+        }
+
 #compressor 1
-m.fs.comp1 = idaesPressureChanger.PressureChanger(
-        property_package=m.fs.props,
-        dynamic=False,
-        compressor=True,
-        thermodynamic_assumption=idaesPressureChanger.ThermodynamicAssumption.isentropic,
-        )
+m.fs.comp1 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp1.efficiency_isentropic.fix(0.85)
 
-#pipe 1
-m.fs.pipe1 = pipeline(
-        property_package=m.fs.props,
-        length=20000,
-        diameter=0.45,
-        roughness=0.0475e-3,
-        alpha=5,
-        ambient_temperature=293.15,
-        average_pressure_type='nonlinear',
-        heat_balance_type='nonisothermal',
-        )
+m.fs.pipe1 = pipeline(**pipeline_config,length=3000)
+m.fs.pipe1.diameter.fix(0.4)
+m.fs.pipe1.roughness.fix(0.0475e-3)
 
-#node 1
-m.fs.node1 = node(
-        property_package=m.fs.props,
-        inlet_list=["source1"],
-        outlet_list=["branch1","branch2"]
-        )
-
-#pipe 2
-m.fs.pipe2 = pipeline(
-        property_package=m.fs.props,
-        length=300000,
-        diameter=0.4,
-        roughness=0.0475e-3,
-        alpha=5,
-        ambient_temperature=293.15,
-        average_pressure_type='nonlinear',
-        heat_balance_type='nonisothermal',
-        )
-
-#pipe 3
-m.fs.pipe3 = pipeline(
-        property_package=m.fs.props,
-        length=500,
-        diameter=0.1,
-        roughness=0.0473e-3,
-        alpha=5,
-        ambient_temperature=293.15,
-        average_pressure_type='nonlinear',
-        heat_balance_type='nonisothermal',
-        )
-
-#compressor 2
-m.fs.comp2 = idaesPressureChanger.PressureChanger(
-        property_package=m.fs.props,
-        dynamic=False,
-        compressor=True,
-        thermodynamic_assumption=idaesPressureChanger.ThermodynamicAssumption.isentropic,
-        )
-m.fs.comp2.efficiency_isentropic.fix(0.86)
-
-#node 2
-m.fs.node2 = node(
-        property_package=m.fs.props,
-        inlet_list=["branch1"],
-        outlet_list=["branch3","branch4"],
-        )
-
-#pipe 4
-m.fs.pipe4 = pipeline(
-        property_package=m.fs.props,
-        length=600,
-        diameter=0.1,
-        roughness=0.0475e-3,
-        alpha=5,
-        ambient_temperature=293.15,
-        average_pressure_type='nonlinear',
-        heat_balance_type='nonisothermal',
-        )
-
-#pipe 5
-m.fs.pipe5 = pipeline(
-        property_package=m.fs.props,
-        length=450000,
-        diameter=0.3,
-        roughness=0.0475e-3,
-        alpha=5,
-        ambient_temperature=293.15,
-        average_pressure_type='nonlinear',
-        heat_balance_type='nonisothermal',
-        )
-
-#wellpad 1
-m.fs.wellpad1 = wellpad(
-        property_package=m.fs.props,
-        Boi=1.2,
-        GOR=0.6,
-        PC_A=0.4,
-        PC_B=0.6,
-        GB_A=0.62,
-        GB_B=1.12,
-        kovr=1.5E-14,
-        use_correction_factor=False,
-        BHP_max=300*100000,
-        multiplier=66,
-        )
-m.fs.wellpad1.reservoir_state.pressure[0].fix(140*100000)
-m.fs.wellpad1.reservoir_state.temperature[0].fix(306)
-m.fs.wellpad1.HCPV.fix(0.5)
-
-#wellpad 2
-m.fs.wellpad2 = wellpad(
-        property_package=m.fs.props,
-        Boi=1.3,
-        GOR=0.7,
-        PC_A=0.3,
-        PC_B=0.5,
-        GB_A=0.53,
-        GB_B=1.18,
-        kovr=8.7E-15,
-        use_correction_factor=False,
-        BHP_max=320*100000,
-        multiplier=66,
-        )
-m.fs.wellpad2.reservoir_state.pressure[0].fix(150*100000)
-m.fs.wellpad2.reservoir_state.temperature[0].fix(295)
-m.fs.wellpad2.HCPV.fix(0.5)
-
-#wellpad 3
-m.fs.wellpad3 = wellpad(
-        property_package=m.fs.props,
-        Boi=1.4,
-        GOR=0.75,
-        PC_A=0.25,
-        PC_B=0.3,
-        GB_A=0.67,
-        GB_B=1.21,
-        kovr=5.5E-15,
-        use_correction_factor=False,
-        BHP_max=340*100000,
-        multiplier=100,
-        )
-m.fs.wellpad3.reservoir_state.pressure[0].fix(120*100000)
-m.fs.wellpad3.reservoir_state.temperature[0].fix(340)
-m.fs.wellpad3.HCPV.fix(0.5)
-
-#create arcs
 m.fs.s1 = Arc(source=m.fs.comp1.outlet,destination=m.fs.pipe1.inlet)
-m.fs.s2 = Arc(source=m.fs.pipe1.outlet,destination=m.fs.node1.mix.source1)
-m.fs.s3 = Arc(source=m.fs.node1.split.branch1,destination=m.fs.pipe2.inlet)
-m.fs.s4 = Arc(source=m.fs.node1.split.branch2,destination=m.fs.pipe3.inlet)
-m.fs.s5 = Arc(source=m.fs.pipe3.outlet,destination=m.fs.wellpad1.inlet)
-m.fs.s6 = Arc(source=m.fs.pipe2.outlet,destination=m.fs.comp2.inlet)
-m.fs.s7 = Arc(source=m.fs.comp2.outlet,destination=m.fs.node2.mix.branch1)
-m.fs.s8 = Arc(source=m.fs.node2.split.branch3,destination=m.fs.pipe4.inlet)
-m.fs.s9 = Arc(source=m.fs.node2.split.branch4,destination=m.fs.pipe5.inlet)
-m.fs.s10 = Arc(source=m.fs.pipe4.outlet,destination=m.fs.wellpad2.inlet)
-m.fs.s11 = Arc(source=m.fs.pipe5.outlet,destination=m.fs.wellpad3.inlet)
+
+m.fs.split1 = splitter(**splitter_config,outlet_list=['to_pipe2','to_pipe4'])
+
+m.fs.s2 = Arc(source=m.fs.pipe1.outlet,destination=m.fs.split1.inlet)
+
+m.fs.pipe2 = pipeline(**pipeline_config,length=1600)
+m.fs.pipe2.diameter.fix(0.2)
+m.fs.pipe2.roughness.fix(0.0475e-3)
+
+m.fs.s3 = Arc(source=m.fs.split1.to_pipe2,destination=m.fs.pipe2.inlet)
+
+m.fs.split2 = splitter(**splitter_config,outlet_list=['to_well1','to_pipe3'])
+
+m.fs.s4 = Arc(source=m.fs.pipe2.outlet,destination=m.fs.split2.inlet)
+
+m.fs.well1 = wellpad(**welltype3_config)
+m.fs.well1.HCPV.fix(0.5)
+
+m.fs.s5 = Arc(source=m.fs.split2.to_well1,destination=m.fs.well1.inlet)
+
+m.fs.pipe3 = pipeline(**pipeline_config,length=5600)
+m.fs.pipe3.diameter.fix(0.1)
+m.fs.pipe3.roughness.fix(0.0475e-3)
+
+m.fs.s6 = Arc(source=m.fs.split2.to_pipe3,destination=m.fs.pipe3.inlet)
+
+m.fs.well2 = wellpad(**welltype1_config)
+m.fs.well2.HCPV.fix(0.5)
+
+m.fs.s7 = Arc(source=m.fs.pipe3.outlet,destination=m.fs.well2.inlet)
+
+m.fs.pipe4 = pipeline(**pipeline_config,length=1600)
+m.fs.pipe4.diameter.fix(0.25)
+m.fs.pipe4.roughness.fix(0.0475e-3)
+
+m.fs.s8 = Arc(source=m.fs.split1.to_pipe4,destination=m.fs.pipe4.inlet)
+
+m.fs.split3 = splitter(**splitter_config,outlet_list=['to_pipe5','to_pipe7'])
+
+m.fs.s9 = Arc(source=m.fs.pipe4.outlet,destination=m.fs.split3.inlet)
+
+m.fs.pipe5 = pipeline(**pipeline_config,length=800)
+m.fs.pipe5.diameter.fix(0.2)
+m.fs.pipe5.roughness.fix(0.0475e-3)
+
+m.fs.s10 = Arc(source=m.fs.split3.to_pipe5,destination=m.fs.pipe5.inlet)
+
+m.fs.split4 = splitter(**splitter_config,outlet_list=['to_well3','to_pipe6'])
+
+m.fs.s11 = Arc(source=m.fs.pipe5.outlet,destination=m.fs.split4.inlet)
+
+m.fs.well3 = wellpad(**welltype2_config)
+m.fs.well3.HCPV.fix(0.5)
+
+m.fs.s12 = Arc(source=m.fs.split4.to_well3,destination=m.fs.well3.inlet)
+
+m.fs.pipe6 = pipeline(**pipeline_config,length=1600)
+m.fs.pipe6.diameter.fix(0.1)
+m.fs.pipe6.roughness.fix(0.475e-3)
+
+m.fs.s13 = Arc(source=m.fs.split4.to_pipe6,destination=m.fs.pipe6.inlet)
+
+m.fs.well4 = wellpad(**welltype3_config)
+m.fs.well4.HCPV.fix(0.5)
+
+m.fs.s14 = Arc(source=m.fs.pipe6.outlet,destination=m.fs.well4.inlet)
+
+m.fs.pipe7 = pipeline(**pipeline_config,length=800)
+m.fs.pipe7.diameter.fix(0.2)
+m.fs.pipe7.roughness.fix(0.0475e-3)
+
+m.fs.s15 = Arc(source=m.fs.split3.to_pipe7,destination=m.fs.pipe7.inlet)
+
+m.fs.split5 = splitter(**splitter_config,outlet_list=['to_well5','to_pipe8'])
+
+m.fs.s16 = Arc(source=m.fs.pipe7.outlet,destination=m.fs.split5.inlet)
+
+m.fs.well5 = wellpad(**welltype2_config)
+m.fs.well5.HCPV.fix(0.5)
+
+m.fs.s17 = Arc(source=m.fs.split5.to_well5,destination=m.fs.well5.inlet)
+
+m.fs.pipe8 = pipeline(**pipeline_config,length=1600)
+m.fs.pipe8.diameter.fix(0.2)
+m.fs.pipe8.roughness.fix(0.0475e-3)
+
+m.fs.s18 = Arc(source=m.fs.split5.to_pipe8,destination=m.fs.pipe8.inlet)
+
+m.fs.split6 = splitter(**splitter_config,outlet_list=['to_well6','to_pipe9'])
+
+m.fs.s19 = Arc(source=m.fs.pipe8.outlet,destination=m.fs.split6.inlet)
+
+m.fs.well6 = wellpad(**welltype3_config)
+m.fs.well6.HCPV.fix(0.5)
+
+m.fs.s20 = Arc(source=m.fs.split6.to_well6,destination=m.fs.well6.inlet)
+
+m.fs.pipe9 = pipeline(**pipeline_config,length=800)
+m.fs.pipe9.diameter.fix(0.1)
+m.fs.pipe9.roughness.fix(0.0475e-3)
+
+m.fs.s21 = Arc(source=m.fs.split6.to_pipe9,destination=m.fs.pipe9.inlet)
+
+m.fs.well7 = wellpad(**welltype1_config)
+m.fs.well7.HCPV.fix(0.5)
+
+m.fs.s22 = Arc(source=m.fs.pipe9.outlet,destination=m.fs.well7.inlet)
 
 #expand arcs
 pyo.TransformationFactory("network.expand_arcs").apply_to(m)
@@ -184,27 +234,28 @@ print(f'D.o.F before specifying inlet conds={idaes.core.util.model_statistics.de
 #inlet DoF
 m.fs.comp1.inlet.pressure[0].fix(100*100000)
 m.fs.comp1.inlet.temperature[0].fix(298)
+m.fs.comp1.outlet.pressure[0].fix(300*100000)
+m.fs.comp1.inlet.flow_mass[0].fix(0)
 
-#comp 1 DoF
-m.fs.comp1.outlet.pressure[0].fix(350*100000)
-
-#node 1 DoF
-m.fs.node1.split.branch1.pressure[0].fix(300*100000)
-m.fs.node1.split.branch2.pressure[0].fix(290*100000)
-
-#comp 2 DoF
-m.fs.comp2.outlet.pressure[0].fix(320*100000)
-
-#node 2 DoF
-m.fs.node2.split.branch3.pressure[0].fix(310*100000)
-m.fs.node2.split.branch4.pressure[0].fix(320*100000)
+"""
+m.fs.pipe1.inlet.flow_mass[0].fix(0)
+m.fs.pipe2.inlet.flow_mass[0].fix(0)
+m.fs.pipe3.inlet.flow_mass[0].fix(0)
+m.fs.pipe4.inlet.flow_mass[0].fix(0)
+m.fs.pipe5.inlet.flow_mass[0].fix(0)
+m.fs.pipe6.inlet.flow_mass[0].fix(0)
+m.fs.pipe7.inlet.flow_mass[0].fix(0)
+m.fs.pipe8.inlet.flow_mass[0].fix(0)
+m.fs.pipe9.inlet.flow_mass[0].fix(0)
+"""
 
 #check degrees of freedom
-print(f'D.o.F after specifying PT={idaes.core.util.model_statistics.degrees_of_freedom(m)}')
+#print(f'D.o.F after specifying PT={idaes.core.util.model_statistics.degrees_of_freedom(m)}')
 
 #initialize
 
 from pyomo.network import SequentialDecomposition
+from idaes.core.util.initialization import propagate_state
 seq = SequentialDecomposition()
 seq.options.select_tear_method = "heuristic"
 seq.options.tear_method = "Wegstein"
@@ -213,13 +264,25 @@ seq.options.iterLim = 5
 G = seq.create_graph(m)
 heauristic_tear_set = seq.tear_set_arcs(G,method="heuristic")
 order = seq.calculation_order(G)
+
+#seq.set_guesses_for(m.fs.comp1.inlet.flow_mass[0],0)
+#seq.set_guesses_for(m.fs.comp1.outlet.pressure[0],300*100000)
+
 for o in heauristic_tear_set:
     print(o.name)
 
 def function(unit):
-    unit.initialize()
+    try:
+        unit.initialize()
+    except ValueError:
+        unit.deactivate_feasibility_problem()
+        print(f'solve failed, propagating state')
+        propagate_state(unit.inlet,unit.outlet)
 
 seq.run(m,function)
+print(f'pre-initialization done')
+
+input()
 
 #activate feasibility problem
 m.fs.pipe1.activate_slack_variables()
@@ -227,76 +290,86 @@ m.fs.pipe2.activate_slack_variables()
 m.fs.pipe3.activate_slack_variables()
 m.fs.pipe4.activate_slack_variables()
 m.fs.pipe5.activate_slack_variables()
-m.fs.wellpad1.activate_slack_variables()
-m.fs.wellpad2.activate_slack_variables()
-m.fs.wellpad3.activate_slack_variables()
+m.fs.pipe6.activate_slack_variables()
+m.fs.pipe7.activate_slack_variables()
+m.fs.pipe8.activate_slack_variables()
+m.fs.pipe9.activate_slack_variables()
+
+m.fs.well1.activate_slack_variables()
+m.fs.well2.activate_slack_variables()
+m.fs.well3.activate_slack_variables()
+m.fs.well4.activate_slack_variables()
+m.fs.well5.activate_slack_variables()
+m.fs.well6.activate_slack_variables()
+m.fs.well7.activate_slack_variables()
+
 m.feasibility_obj = pyo.Objective(
-        expr= m.fs.pipe1.feasibility_expression + m.fs.pipe2.feasibility_expression + m.fs.pipe3.feasibility_expression
-        + m.fs.pipe4.feasibility_expression + m.fs.pipe5.feasibility_expression + m.fs.wellpad1.feasibility_expression
-        + m.fs.wellpad2.feasibility_expression + m.fs.wellpad3.feasibility_expression
+        expr= m.fs.pipe1.feasibility_expression + m.fs.pipe2.feasibility_expression + 
+        m.fs.pipe3.feasibility_expression + m.fs.pipe4.feasibility_expression + 
+        m.fs.pipe5.feasibility_expression + m.fs.pipe6.feasibility_expression +
+        m.fs.pipe7.feasibility_expression + m.fs.pipe8.feasibility_expression +
+        m.fs.pipe9.feasibility_expression + m.fs.well1.feasibility_expression +
+        m.fs.well2.feasibility_expression + m.fs.well3.feasibility_expression + 
+        m.fs.well4.feasibility_expression + m.fs.well5.feasibility_expression +
+        m.fs.well6.feasibility_expression + m.fs.well7.feasibility_expression
         )
 
+"""
 #create solver
 solver1 = pyo.SolverFactory('ipopt')
 solver1.options['linear_solver']='ma57'
+solver1.options['tol']=1e-6
+#solver1.options['acceptable_constr_viol_tol']=1e-4
+#solver1.options['override_resto_exception']=True
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
 res=solver1.solve(scaled_m,tee=True,logfile='ipopt_output.log')
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
-#m.display()
-m.fs.pipe1.print_all()
-m.fs.pipe2.print_all()
-m.fs.pipe3.print_all()
-m.fs.pipe4.print_all()
-m.fs.pipe5.print_all()
-m.fs.comp1.report()
-m.fs.comp2.report()
-m.fs.wellpad1.print_all()
-m.fs.wellpad2.print_all()
-m.fs.wellpad3.print_all()
+m.display()
 
-input("post initialization pause")
+input("post initialization done")
+"""
 
 #unfix variables for optimization
+m.feasibility_obj.deactivate()
 
 #comp 1 DoF
+m.fs.comp1.inlet.flow_mass[0].unfix()
 m.fs.comp1.outlet.pressure[0].unfix()
 
-#node 1 DoF
-m.fs.node1.split.branch1.pressure[0].unfix()
-m.fs.node1.split.branch2.pressure[0].unfix()
-
-#comp 2 DoF
-m.fs.comp2.outlet.pressure[0].unfix()
-
-#node 2 DoF
-m.fs.node2.split.branch3.pressure[0].unfix()
-m.fs.node2.split.branch4.pressure[0].unfix()
-
-#deactivate feasibility problem
+#slack variables
 m.fs.pipe1.deactivate_slack_variables()
 m.fs.pipe2.deactivate_slack_variables()
 m.fs.pipe3.deactivate_slack_variables()
 m.fs.pipe4.deactivate_slack_variables()
 m.fs.pipe5.deactivate_slack_variables()
-m.fs.wellpad1.deactivate_slack_variables()
-m.fs.wellpad2.deactivate_slack_variables()
-m.fs.wellpad3.deactivate_slack_variables()
-m.feasibility_obj.deactivate()
+m.fs.pipe6.deactivate_slack_variables()
+m.fs.pipe7.deactivate_slack_variables()
+m.fs.pipe8.deactivate_slack_variables()
+m.fs.pipe9.deactivate_slack_variables()
 
-#constraint compressor 1 work
+m.fs.well1.deactivate_slack_variables()
+m.fs.well2.deactivate_slack_variables()
+m.fs.well3.deactivate_slack_variables()
+m.fs.well4.deactivate_slack_variables()
+m.fs.well5.deactivate_slack_variables()
+m.fs.well6.deactivate_slack_variables()
+m.fs.well7.deactivate_slack_variables()
+
+#compressor 1 work
 #m.comp1Constraint = pyo.Constraint(expr=m.fs.comp1.work_mechanical[0]<=3700000)
 
 #new objective function
 m.opex_obj = pyo.Objective(
-        expr= 3E-8*(m.fs.comp1.work_mechanical[0]+m.fs.comp2.work_mechanical[0])+0.050*m.fs.pipe1.inlet.flow_mass[0]-75*(m.fs.wellpad1.q_OIL_PROD+m.fs.wellpad2.q_OIL_PROD+m.fs.wellpad3.q_OIL_PROD)
+        expr= 3E-8*(m.fs.comp1.work_mechanical[0])+0.040*m.fs.pipe1.inlet.flow_mass[0]-75*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD)
         )
 
 solver2 = pyo.SolverFactory('ipopt')
-solver2.options['linear_solver']='ma97'
-solver2.options['tol']=1E-6
+solver2.options['linear_solver']='ma57'
+solver2.options['tol']=1E-7
+#solver2.options['nlp_scaling_method']='gradient-based'
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
@@ -306,28 +379,19 @@ res=solver2.solve(scaled_m,tee=True,logfile='ipopt_output.log')
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 #m.display()
 
-m.fs.pipe1.print_all()
-m.fs.pipe2.print_all()
-m.fs.pipe3.print_all()
-m.fs.pipe4.print_all()
-m.fs.pipe5.print_all()
-m.fs.comp1.report()
-m.fs.comp2.report()
-m.fs.wellpad1.print_all()
-m.fs.wellpad2.print_all()
-m.fs.wellpad3.print_all()
-"""
-m.fs.pipe1.display()
-m.fs.comp1.display()
-m.fs.pipe2.display()
-m.fs.pipe3.display()
-m.fs.comp2.display()
-m.fs.pipe4.display()
-m.fs.pipe5.display()
-m.fs.wellpad1.display()
-m.fs.wellpad1.print_expressions()
-m.fs.wellpad2.display()
-m.fs.wellpad2.print_expressions()
-m.fs.wellpad3.display()
-m.fs.wellpad3.print_expressions()
-"""
+pyo.assert_optimal_termination(res)
+
+import pandas as pd
+from idaes.core.util.tables import generate_table
+
+pipe_dfs = [m.fs.pipe1.export_df(),m.fs.pipe2.export_df(),m.fs.pipe3.export_df(),m.fs.pipe4.export_df(),m.fs.pipe5.export_df(),m.fs.pipe6.export_df(),m.fs.pipe7.export_df(),m.fs.pipe8.export_df(),m.fs.pipe9.export_df()]
+well_dfs = [m.fs.well1.export_df(),m.fs.well2.export_df(),m.fs.well3.export_df(),m.fs.well4.export_df(),m.fs.well5.export_df(),m.fs.well6.export_df(),m.fs.well7.export_df()]
+
+combined_pipe_df = pd.concat(pipe_dfs)
+combined_well_df = pd.concat(well_dfs)
+combined_comp_df = generate_table({"fs.comp1":m.fs.comp1},['inlet.flow_mass[0]','inlet.pressure[0]','inlet.temperature[0]','outlet.pressure[0]','outlet.temperature[0]','work_mechnical[0]'])
+
+with pd.ExcelWriter('flowsheet5data.xlsx') as writer:
+    combined_pipe_df.to_excel(writer,sheet_name="PipeData",index=True)
+    combined_well_df.to_excel(writer,sheet_name="WellData",index=True)
+    combined_comp_df.to_excel(writer,sheet_name="CompData",index=True)

@@ -1,6 +1,7 @@
 #wellpad model V2
 
 import pyomo.environ as pyo
+import pandas as pd
 from pyomo.common.config import ConfigBlock, ConfigValue, In
 from idaes.core import (
     ControlVolume0DBlock,
@@ -15,7 +16,6 @@ from idaes.core import (
 from idaes.core.util.config import is_physical_parameter_block
 from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
-from idaes.core.util.model_statistics import degrees_of_freedom
 from pyomo.network import Arc
 from co2_eor import pipeline
 
@@ -28,7 +28,15 @@ def make_wellpad_config_block(config):
     config.declare(
             "has_phase_equilibrium",
             ConfigValue(default=False, domain=In([False]))
-            )    
+            )
+    config.declare(
+            "temperature",
+            ConfigValue(default=300,domain=float) #reservoir temperature
+            )
+    config.declare(
+            "pressure",
+            ConfigValue(default=120*100000,domain=float) #reservoir pressure
+            )
     config.declare(
             "Boi",
             ConfigValue(default=1.3,domain=float)#RBoil/STBoil
@@ -143,6 +151,10 @@ def add_equations(unit,name,config):
     injection_state=unit.control_volume.injection_state
     reservoir_state=unit.control_volume.properties_out[0]
 
+    #fix reservoir temperature and pressure
+    reservoir_state.pressure.fix(config.pressure)
+    reservoir_state.temperature.fix(config.temperature)
+
     #define HCPV
     unit.HCPV = pyo.Var(domain=pyo.NonNegativeReals)
 
@@ -159,7 +171,7 @@ def add_equations(unit,name,config):
         unit.wellbore.diameter.fix(config.wellbore_diameter)
         unit.wellbore.roughness.fix(config.wellbore_roughness)
 
-        #manually add constraints to connect wellpad states to pipe states
+        #manually add constraints wellpad states to pipe states
         unit.wellbore_connection_constraints.add(
                 expr=inlet.flow_mass==unit.wellbore.control_volume.properties_in[0].flow_mass*unit.multiplier
                 )
@@ -191,7 +203,7 @@ def add_equations(unit,name,config):
                 )
 
     #create slack variables for initialization
-    num_slacks=3
+    num_slacks=2
     unit.spos = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.sneg = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.spos.fix(0)
@@ -209,17 +221,19 @@ def add_equations(unit,name,config):
 
     #mass balance between injection state and reservoir state
     unit.mass_bal = pyo.Constraint(
-            expr=injection_state.flow_mass==reservoir_state.flow_mass +unit.spos[1]-unit.sneg[1]
+            expr=injection_state.flow_mass==reservoir_state.flow_mass
             ) #constraint 1
 
     #CO2 Injection Rate RB/s
     unit.q_CO2_INJ = pyo.Var(domain=pyo.NonNegativeReals)
     #calculate injection rate
     unit.injection_rate_from_density_constraint = pyo.Constraint(
-            expr=unit.q_CO2_INJ==injection_state.flow_mass/injection_state.dens_mass*6.29 +unit.spos[2]-unit.sneg[2]
+            expr=unit.q_CO2_INJ==injection_state.flow_mass/injection_state.dens_mass*6.29 +unit.spos[1]-unit.sneg[1]
             ) #constraint 3
     unit.injection_rate_from_darcys_law_constraint = pyo.Constraint(
-            expr=unit.q_CO2_INJ==unit.kovr/reservoir_state.visc_d_phase["Liq"]*(injection_state.pressure-reservoir_state.pressure) +unit.spos[3]-unit.sneg[3]
+            expr=unit.q_CO2_INJ==
+                unit.kovr*6.29/reservoir_state.visc_d_phase["Liq"]*(injection_state.pressure-reservoir_state.pressure)+
+                    unit.spos[2]-unit.sneg[2]
             ) #constraint 4
 
     #sensitivity curve correction factor
@@ -253,6 +267,7 @@ def add_equations(unit,name,config):
     unit.min_BHP_constraint = pyo.Constraint(
             expr=injection_state.pressure>=reservoir_state.pressure
             )
+
 
 def guess_scales(unit,name,config):
     inlet=unit.control_volume.properties_in[0]
@@ -386,4 +401,32 @@ class wellpadData(UnitModelBlockData):
         self.print_parameters()
         self.print_variables()
         self.print_expressions()
+
+    def export_df(self):
+        data = {
+                "reservoir temperature (K)":pyo.value(self.reservoir_state.temperature[0]),
+                "reservoir pressure (bar)": pyo.value(self.reservoir_state.pressure[0])/100000,
+                "oil volume factor (STB oil/RB oil)":pyo.value(self.Boi),
+                "gas oil ratio (RB gas/RB oil)":pyo.value(self.GOR),
+                "production curve fit parameter A":pyo.value(self.PC_A),
+                "production curve fit parameter B":pyo.value(self.PC_B),
+                "gas breakthrough curve fit parameter A":pyo.value(self.GB_A),
+                "gas breakthrough curve fit parameter B":pyo.value(self.GB_B),
+                "k overall (m3)":pyo.value(self.kovr),
+                "max BHP (bar)":pyo.value(self.BHP_max)/100000,
+                "multiplier":pyo.value(self.multiplier),
+                "HCPV":pyo.value(self.HCPV),
+                "total CO2 injection rate (kg/s)":pyo.value(self.inlet.flow_mass[0]),
+                "unit CO2 injection rate (kg/s)":pyo.value(self.control_volume.injection_state.flow_mass),
+                "inlet pressure (bar)":pyo.value(self.inlet.pressure[0])/100000,
+                "inlet temperature (K)":pyo.value(self.inlet.temperature[0]),
+                "injection pressure (bar)":pyo.value(self.control_volume.injection_state.pressure)/100000,
+                "injection temperature (K)":pyo.value(self.control_volume.injection_state.temperature),
+                "correction factor":pyo.value(self.correction_factor),
+                "oil production rate (STB/s)":pyo.value(self.q_OIL_PROD),
+                "gas production rate (RB/s)":pyo.value(self.q_GAS_PROD),
+                "CO2 breakthrough rate (RB/s)":pyo.value(self.q_CO2_BRKTH)
+                }
+
+        return pd.DataFrame(data,index=[self.name])
 

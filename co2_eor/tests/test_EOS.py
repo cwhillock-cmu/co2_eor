@@ -14,17 +14,18 @@ m.fs.paramBlock = idaesHelmholtz.HelmholtzParameterBlock(
 m.fs.stateBlock1 = m.fs.paramBlock.build_state_block(defined_state=True)
 
 m.fs.stateBlock1.flow_mass.fix(100)
-m.fs.stateBlock1.temperature.fix(293)
+m.fs.stateBlock1.temperature.fix(273.15+36.75)
 #m.fs.stateBlock1.pressure.fix(73*100000)
 
 #m.fs.stateBlock1.initialize()
 #print(f'mass density: {pyo.value(m.fs.stateBlock1.dens_mass)}')
 #print(f'cp mass: {pyo.value(m.fs.stateBlock1.cp_mass)}')
 
-plist = np.linspace(60,120,40)
+plist = np.linspace(75,90,30)
 
 for p in plist:
     m.fs.stateBlock1.pressure=p*100000
     m.fs.stateBlock1.vapor_frac=0.5
     m.fs.stateBlock1.initialize()
-    print(f'pressure:{p:.2f},density:{pyo.value(m.fs.stateBlock1.dens_mass):.2f},Tcrit:{pyo.value(m.fs.stateBlock1.temperature_crit):.2f},Pcrit:{pyo.value(m.fs.stateBlock1.pressure_crit)/100000:.2f},Tsat:{pyo.value(m.fs.stateBlock1.temperature_sat):.2f},Psat:{pyo.value(m.fs.stateBlock1.pressure_sat)/100000:.2f},L Visc:{pyo.value(m.fs.stateBlock1.visc_d_phase["Liq"])},G Visc:{pyo.value(m.fs.stateBlock1.visc_d_phase["Vap"])},x:{pyo.value(m.fs.stateBlock1.vapor_frac)}')
+    #print(f'pressure:{p:.2f},density:{pyo.value(m.fs.stateBlock1.dens_mass):.2f},Tcrit:{pyo.value(m.fs.stateBlock1.temperature_crit):.2f},Pcrit:{pyo.value(m.fs.stateBlock1.pressure_crit)/100000:.2f},Tsat:{pyo.value(m.fs.stateBlock1.temperature_sat):.2f},Psat:{pyo.value(m.fs.stateBlock1.pressure_sat)/100000:.2f},L Visc:{pyo.value(m.fs.stateBlock1.visc_d_phase["Liq"])},G Visc:{pyo.value(m.fs.stateBlock1.visc_d_phase["Vap"])},x:{pyo.value(m.fs.stateBlock1.vapor_frac)}, L sos:{pyo.value(m.fs.stateBlock1.speed_sound_phase["Liq"]):.2f}, V sos: {pyo.value(m.fs.stateBlock1.speed_sound_phase["Vap"]):.2f}')
+    print(f'pressure:{p:.2f},Cp: {pyo.value(m.fs.stateBlock1.cp_mass):.2f} Cp/Cv: {pyo.value(m.fs.stateBlock1.heat_capacity_ratio):.2f}')
