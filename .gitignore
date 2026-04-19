@@ -2,3 +2,7 @@ __pycache__/
 co2_eor/__pycache__/
 *.egg-info/
 .venv/
+*.LOG
+*.OUT
+*.SUM
+temps/

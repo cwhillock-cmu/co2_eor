@@ -13,6 +13,12 @@
 """
 General purpose separator block for IDAES models
 """
+"""
+COPY FILE FOR CO2_EOR
+Changes:
+    1. Couldn't figure out how to add a MomentumBalanceType object/enum so remapped None to add inequality constraint
+        All outlet pressures less than or equal to inlet pressure
+"""
 
 from enum import Enum
 from functools import partial

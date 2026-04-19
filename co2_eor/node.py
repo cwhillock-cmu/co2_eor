@@ -1,3 +1,6 @@
+#Node model
+#deprecated
+
 import pyomo.environ as pyo
 from pyomo.common.config import ConfigBlock, ConfigValue, In, ListOf,Bool
 from pyomo.network import Arc

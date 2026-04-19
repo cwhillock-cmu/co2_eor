@@ -12,6 +12,13 @@
 #################################################################################
 """
 General purpose mixer block for IDAES models
+
+"""
+"""
+FILE COPY FOR CO2_EOR
+CHANGES:
+    1. Added inequality mixing type (see enums)
+        enforces that mixed stream is less than or equal to all inlet streams
 """
 
 from enum import Enum

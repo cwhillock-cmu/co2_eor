@@ -1,14 +1,20 @@
 import pyomo.environ as pyo
-import pyomo.util as pyoutil
 import idaes.core
-import idaes.logger as idaeslog
+from pyomo.network import Arc
+
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
 import idaes.models.unit_models.pressure_changer as idaesPressureChanger
+
 from idaes.core import MomentumBalanceType
 from co2_eor.splitter import EnergySplittingType
 from co2_eor.mixer import MomentumMixingType
+
+from idaes.models.costing.SSLW import SSLWCosting, SSLWCostingData
+from idaes.models.costing.SSLW import CompressorType, CompressorDriveType, CompressorMaterial
+from idaes.models.costing.SSLW import VesselMaterial
+
 from co2_eor import pipeline, wellpad, mixer,splitter
-from pyomo.network import Arc
+from co2_eor.util_funcs import export_compressor_df
 
 #model, flowsheet, and parameter block
 m = pyo.ConcreteModel()
@@ -18,6 +24,8 @@ m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         state_vars=idaesHelmholtz.StateVars.TPX,phase_presentation=idaesHelmholtz.PhaseType.L,
         #has_phase_equilibrium=False,
         )
+
+m.fs.costing = SSLWCosting()
 
 compressor_config = {
         "property_package": m.fs.props,
@@ -32,7 +40,7 @@ pipeline_config = {
         "ambient_temperature":293.15,
         "average_pressure_type":'linear',
         "heat_balance_type":'nonisothermal',
-        "average_weight":0,
+        "average_weight":0.5,
         "height_change":0,
         }
 
@@ -61,11 +69,8 @@ welltype1_config = {
         "kovr":1.5E-14,
         "use_correction_factor":False,
         "BHP_max":300*100000,
-        "multiplier":20,
-        "use_wellbore_pipe_model":False,
+        "multiplier":3,
         "depth":1000,
-        "wellbore_diameter":0.076,
-        "wellbore_roughness":0.0475e-3,
         }
 
 welltype2_config = {
@@ -81,11 +86,8 @@ welltype2_config = {
         "kovr":8.7E-15,
         "use_correction_factor":False,
         "BHP_max":320*100000,
-        "multiplier":20,
-        "use_wellbore_pipe_model":False,
+        "multiplier":2,
         "depth":1000,
-        "wellbore_diameter":0.076,
-        "wellbore_roughness":0.0475e-3,
         }
 
 welltype3_config={
@@ -98,22 +100,38 @@ welltype3_config={
         "PC_B":0.3,
         "GB_A":0.67,
         "GB_B":1.21,
-        "kovr":5.5E-15,
+        "kovr":0.2E-14,
         "use_correction_factor":False,
         "BHP_max":340*100000,
-        "multiplier":20,
-        "use_wellbore_pipe_model":False,
+        "multiplier":2,
         "depth":1000,
-        "wellbore_diameter":0.076,
-        "wellbore_roughness":0.0475e-3,
         }
+
+pipeline_costing_config={
+    "flowsheet_costing_block":m.fs.costing,
+    "costing_method":SSLWCostingData.cost_horizontal_vessel,
+    "costing_method_arguments":{
+        "material_type":VesselMaterial.StainlessSteel316,
+        "include_platforms_ladders":False,
+    }
+}
 
 #compressor 1
 m.fs.comp1 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp1.efficiency_isentropic.fix(0.85)
+m.fs.comp1.costing = idaes.core.UnitModelCostingBlock(
+    flowsheet_costing_block=m.fs.costing,
+    costing_method=SSLWCostingData.cost_compressor,
+    costing_method_arguments={
+        "compressor_type":CompressorType.Centrifugal,
+        "drive_type":CompressorDriveType.ElectricMotor,
+        "material_type":CompressorMaterial.StainlessSteel
+    }
+)
 
 m.fs.pipe1 = pipeline(**pipeline_config,length=3000)
-m.fs.pipe1.diameter.fix(0.4)
+m.fs.pipe1.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe1.diameter.fix(0.2)
 m.fs.pipe1.roughness.fix(0.0475e-3)
 
 m.fs.s1 = Arc(source=m.fs.comp1.outlet,destination=m.fs.pipe1.inlet)
@@ -123,7 +141,8 @@ m.fs.split1 = splitter(**splitter_config,outlet_list=['to_pipe2','to_pipe4'])
 m.fs.s2 = Arc(source=m.fs.pipe1.outlet,destination=m.fs.split1.inlet)
 
 m.fs.pipe2 = pipeline(**pipeline_config,length=1600)
-m.fs.pipe2.diameter.fix(0.2)
+m.fs.pipe2.costing=idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe2.diameter.fix(0.15)
 m.fs.pipe2.roughness.fix(0.0475e-3)
 
 m.fs.s3 = Arc(source=m.fs.split1.to_pipe2,destination=m.fs.pipe2.inlet)
@@ -138,6 +157,7 @@ m.fs.well1.HCPV.fix(0.5)
 m.fs.s5 = Arc(source=m.fs.split2.to_well1,destination=m.fs.well1.inlet)
 
 m.fs.pipe3 = pipeline(**pipeline_config,length=5600)
+m.fs.pipe3.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
 m.fs.pipe3.diameter.fix(0.1)
 m.fs.pipe3.roughness.fix(0.0475e-3)
 
@@ -149,7 +169,8 @@ m.fs.well2.HCPV.fix(0.5)
 m.fs.s7 = Arc(source=m.fs.pipe3.outlet,destination=m.fs.well2.inlet)
 
 m.fs.pipe4 = pipeline(**pipeline_config,length=1600)
-m.fs.pipe4.diameter.fix(0.25)
+m.fs.pipe4.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe4.diameter.fix(0.15)
 m.fs.pipe4.roughness.fix(0.0475e-3)
 
 m.fs.s8 = Arc(source=m.fs.split1.to_pipe4,destination=m.fs.pipe4.inlet)
@@ -159,7 +180,8 @@ m.fs.split3 = splitter(**splitter_config,outlet_list=['to_pipe5','to_pipe7'])
 m.fs.s9 = Arc(source=m.fs.pipe4.outlet,destination=m.fs.split3.inlet)
 
 m.fs.pipe5 = pipeline(**pipeline_config,length=800)
-m.fs.pipe5.diameter.fix(0.2)
+m.fs.pipe5.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe5.diameter.fix(0.13)
 m.fs.pipe5.roughness.fix(0.0475e-3)
 
 m.fs.s10 = Arc(source=m.fs.split3.to_pipe5,destination=m.fs.pipe5.inlet)
@@ -174,8 +196,9 @@ m.fs.well3.HCPV.fix(0.5)
 m.fs.s12 = Arc(source=m.fs.split4.to_well3,destination=m.fs.well3.inlet)
 
 m.fs.pipe6 = pipeline(**pipeline_config,length=1600)
+m.fs.pipe6.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
 m.fs.pipe6.diameter.fix(0.1)
-m.fs.pipe6.roughness.fix(0.475e-3)
+m.fs.pipe6.roughness.fix(0.0475e-3)
 
 m.fs.s13 = Arc(source=m.fs.split4.to_pipe6,destination=m.fs.pipe6.inlet)
 
@@ -185,7 +208,8 @@ m.fs.well4.HCPV.fix(0.5)
 m.fs.s14 = Arc(source=m.fs.pipe6.outlet,destination=m.fs.well4.inlet)
 
 m.fs.pipe7 = pipeline(**pipeline_config,length=800)
-m.fs.pipe7.diameter.fix(0.2)
+m.fs.pipe7.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe7.diameter.fix(0.3)
 m.fs.pipe7.roughness.fix(0.0475e-3)
 
 m.fs.s15 = Arc(source=m.fs.split3.to_pipe7,destination=m.fs.pipe7.inlet)
@@ -200,7 +224,8 @@ m.fs.well5.HCPV.fix(0.5)
 m.fs.s17 = Arc(source=m.fs.split5.to_well5,destination=m.fs.well5.inlet)
 
 m.fs.pipe8 = pipeline(**pipeline_config,length=1600)
-m.fs.pipe8.diameter.fix(0.2)
+m.fs.pipe8.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe8.diameter.fix(0.13)
 m.fs.pipe8.roughness.fix(0.0475e-3)
 
 m.fs.s18 = Arc(source=m.fs.split5.to_pipe8,destination=m.fs.pipe8.inlet)
@@ -215,6 +240,7 @@ m.fs.well6.HCPV.fix(0.5)
 m.fs.s20 = Arc(source=m.fs.split6.to_well6,destination=m.fs.well6.inlet)
 
 m.fs.pipe9 = pipeline(**pipeline_config,length=800)
+m.fs.pipe9.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
 m.fs.pipe9.diameter.fix(0.1)
 m.fs.pipe9.roughness.fix(0.0475e-3)
 
@@ -231,26 +257,13 @@ pyo.TransformationFactory("network.expand_arcs").apply_to(m)
 #check degrees of freedom
 print(f'D.o.F before specifying inlet conds={idaes.core.util.model_statistics.degrees_of_freedom(m)}')
 
-#inlet DoF
+#actual inlet specifications
 m.fs.comp1.inlet.pressure[0].fix(100*100000)
 m.fs.comp1.inlet.temperature[0].fix(298)
+
+#pre initialization dof
 m.fs.comp1.outlet.pressure[0].fix(300*100000)
-m.fs.comp1.inlet.flow_mass[0].fix(0)
-
-"""
-m.fs.pipe1.inlet.flow_mass[0].fix(0)
-m.fs.pipe2.inlet.flow_mass[0].fix(0)
-m.fs.pipe3.inlet.flow_mass[0].fix(0)
-m.fs.pipe4.inlet.flow_mass[0].fix(0)
-m.fs.pipe5.inlet.flow_mass[0].fix(0)
-m.fs.pipe6.inlet.flow_mass[0].fix(0)
-m.fs.pipe7.inlet.flow_mass[0].fix(0)
-m.fs.pipe8.inlet.flow_mass[0].fix(0)
-m.fs.pipe9.inlet.flow_mass[0].fix(0)
-"""
-
-#check degrees of freedom
-#print(f'D.o.F after specifying PT={idaes.core.util.model_statistics.degrees_of_freedom(m)}')
+m.fs.comp1.inlet.flow_mass[0].fix(0.01)
 
 #initialize
 
@@ -264,9 +277,6 @@ seq.options.iterLim = 5
 G = seq.create_graph(m)
 heauristic_tear_set = seq.tear_set_arcs(G,method="heuristic")
 order = seq.calculation_order(G)
-
-#seq.set_guesses_for(m.fs.comp1.inlet.flow_mass[0],0)
-#seq.set_guesses_for(m.fs.comp1.outlet.pressure[0],300*100000)
 
 for o in heauristic_tear_set:
     print(o.name)
@@ -282,8 +292,13 @@ def function(unit):
 seq.run(m,function)
 print(f'pre-initialization done')
 
-input()
+#undo pre-initialization dof
+m.fs.comp1.outlet.pressure[0].unfix()
+m.fs.comp1.inlet.flow_mass[0].unfix()
 
+#input()
+"""
+#this was another attempt at initialization but didn't work as good
 #activate feasibility problem
 m.fs.pipe1.activate_slack_variables()
 m.fs.pipe2.activate_slack_variables()
@@ -314,28 +329,41 @@ m.feasibility_obj = pyo.Objective(
         m.fs.well6.feasibility_expression + m.fs.well7.feasibility_expression
         )
 
-"""
+m.fs.well1.inlet.pressure[0].fix(300*100000)
+m.fs.well2.inlet.pressure[0].fix(300*100000)
+m.fs.well3.inlet.pressure[0].fix(300*100000)
+m.fs.well4.inlet.pressure[0].fix(300*100000)
+m.fs.well5.inlet.pressure[0].fix(300*100000)
+m.fs.well6.inlet.pressure[0].fix(300*100000)
+m.fs.well7.inlet.pressure[0].fix(300*100000)
+
 #create solver
 solver1 = pyo.SolverFactory('ipopt')
-solver1.options['linear_solver']='ma57'
+solver1.options['linear_solver']='ma27'
 solver1.options['tol']=1e-6
 #solver1.options['acceptable_constr_viol_tol']=1e-4
 #solver1.options['override_resto_exception']=True
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=solver1.solve(scaled_m,tee=True,logfile='ipopt_output.log')
+res=solver1.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
-m.display()
 
-input("post initialization done")
-"""
+print("main initialization done")
 
 #unfix variables for optimization
 m.feasibility_obj.deactivate()
 
-#comp 1 DoF
+m.fs.well1.inlet.pressure[0].unfix()
+m.fs.well2.inlet.pressure[0].unfix()
+m.fs.well3.inlet.pressure[0].unfix()
+m.fs.well4.inlet.pressure[0].unfix()
+m.fs.well5.inlet.pressure[0].unfix()
+m.fs.well6.inlet.pressure[0].unfix()
+m.fs.well7.inlet.pressure[0].unfix()
+"""
+#DoF
 m.fs.comp1.inlet.flow_mass[0].unfix()
 m.fs.comp1.outlet.pressure[0].unfix()
 
@@ -358,23 +386,41 @@ m.fs.well5.deactivate_slack_variables()
 m.fs.well6.deactivate_slack_variables()
 m.fs.well7.deactivate_slack_variables()
 
-#compressor 1 work
-#m.comp1Constraint = pyo.Constraint(expr=m.fs.comp1.work_mechanical[0]<=3700000)
+m.fs.pipe1.diameter.unfix()
+m.fs.pipe2.diameter.unfix()
+m.fs.pipe3.diameter.unfix()
+m.fs.pipe4.diameter.unfix()
+m.fs.pipe5.diameter.unfix()
+m.fs.pipe6.diameter.unfix()
+m.fs.pipe7.diameter.unfix()
+m.fs.pipe8.diameter.unfix()
+m.fs.pipe9.diameter.unfix()
 
 #new objective function
-m.opex_obj = pyo.Objective(
-        expr= 3E-8*(m.fs.comp1.work_mechanical[0])+0.040*m.fs.pipe1.inlet.flow_mass[0]-75*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD)
+m.opex = pyo.Expression(
+        expr= 365*24*3600* 4E-8*(m.fs.comp1.work_mechanical[0])
         )
+m.raw_mats = pyo.Expression(
+    expr=365*24*3600* 0.045*m.fs.pipe1.inlet.flow_mass[0]
+)
+m.revenue = pyo.Expression(
+    expr=365*24*3600* 70*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD)
+)
+m.capex = pyo.Expression(
+    expr= m.fs.comp1.costing.capital_cost+m.fs.pipe1.costing.capital_cost+m.fs.pipe2.costing.capital_cost+m.fs.pipe3.costing.capital_cost+m.fs.pipe4.costing.capital_cost+m.fs.pipe5.costing.capital_cost+m.fs.pipe6.costing.capital_cost+m.fs.pipe7.costing.capital_cost+m.fs.pipe8.costing.capital_cost+m.fs.pipe9.costing.capital_cost
+)
+m.obj = pyo.Objective(
+    expr=0.1*m.capex+m.opex+m.raw_mats-m.revenue
+)
 
 solver2 = pyo.SolverFactory('ipopt')
-solver2.options['linear_solver']='ma57'
-solver2.options['tol']=1E-7
-#solver2.options['nlp_scaling_method']='gradient-based'
+solver2.options['linear_solver']='ma97'
+solver2.options['tol']=1E-8
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=solver2.solve(scaled_m,tee=True,logfile='ipopt_output.log')
+res=solver2.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 #m.display()
@@ -382,16 +428,37 @@ pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 pyo.assert_optimal_termination(res)
 
 import pandas as pd
-from idaes.core.util.tables import generate_table
 
 pipe_dfs = [m.fs.pipe1.export_df(),m.fs.pipe2.export_df(),m.fs.pipe3.export_df(),m.fs.pipe4.export_df(),m.fs.pipe5.export_df(),m.fs.pipe6.export_df(),m.fs.pipe7.export_df(),m.fs.pipe8.export_df(),m.fs.pipe9.export_df()]
 well_dfs = [m.fs.well1.export_df(),m.fs.well2.export_df(),m.fs.well3.export_df(),m.fs.well4.export_df(),m.fs.well5.export_df(),m.fs.well6.export_df(),m.fs.well7.export_df()]
+comp_dfs = [export_compressor_df(m.fs.comp1)]
 
 combined_pipe_df = pd.concat(pipe_dfs)
 combined_well_df = pd.concat(well_dfs)
-combined_comp_df = generate_table({"fs.comp1":m.fs.comp1},['inlet.flow_mass[0]','inlet.pressure[0]','inlet.temperature[0]','outlet.pressure[0]','outlet.temperature[0]','work_mechnical[0]'])
+combined_comp_df = pd.concat(comp_dfs)
 
-with pd.ExcelWriter('flowsheet5data.xlsx') as writer:
+flowsheet_data = {
+    "pipe 1 capex":pyo.value(m.fs.pipe1.costing.capital_cost),
+    "pipe 2 capex":pyo.value(m.fs.pipe2.costing.capital_cost),
+    "pipe 3 capex":pyo.value(m.fs.pipe3.costing.capital_cost),
+    "pipe 4 capex":pyo.value(m.fs.pipe4.costing.capital_cost),
+    "pipe 5 capex":pyo.value(m.fs.pipe5.costing.capital_cost),
+    "pipe 6 capex":pyo.value(m.fs.pipe6.costing.capital_cost),
+    "pipe 7 capex":pyo.value(m.fs.pipe7.costing.capital_cost),
+    "pipe 8 capex":pyo.value(m.fs.pipe8.costing.capital_cost),
+    "pipe 9 capex":pyo.value(m.fs.pipe9.costing.capital_cost),
+    "compressor 1 capex":pyo.value(m.fs.comp1.costing.capital_cost),
+    "total capex":pyo.value(m.capex),
+    "total opex":pyo.value(m.opex),
+    "total raw material cost":pyo.value(m.raw_mats),
+    "total revenue":pyo.value(m.revenue),
+    "objective function":pyo.value(m.obj),
+}
+flowsheet_df = pd.DataFrame(flowsheet_data,index=[1])
+
+with pd.ExcelWriter('temps/flowsheet5data_localsolve.xlsx') as writer:
     combined_pipe_df.to_excel(writer,sheet_name="PipeData",index=True)
     combined_well_df.to_excel(writer,sheet_name="WellData",index=True)
     combined_comp_df.to_excel(writer,sheet_name="CompData",index=True)
+    flowsheet_df.to_excel(writer,sheet_name="FlowsheetData",index=True)
+
