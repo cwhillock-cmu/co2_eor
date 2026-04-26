@@ -37,7 +37,10 @@ def make_pipeline_config_block(config):
             "ambient_temperature",
             ConfigValue(default=300,domain=float)
             )
-    config.declare("average_weight",
+    config.declare("average_pressure_weight",
+            ConfigValue(default=0.5,domain=float)
+            )
+    config.declare("average_temperature_weight",
             ConfigValue(default=0,domain=float)
             )
     config.declare(
@@ -79,23 +82,25 @@ def add_params(unit,config):
     unit.R = pyo.Param(initialize=8.314462, units=units.m**3*units.Pa/units.K/units.mol) #m^3*Pa*K^{-1}*mol^{-1}
     unit.alpha = pyo.Param(initialize=config.alpha, units=units.W/units.m**2/units.K) #W/m^2K
     unit.ambient_temperature = pyo.Param(initialize=config.ambient_temperature, units=units.K) #K
-    unit.average_weight = pyo.Param(initialize=config.average_weight)
+    unit.average_pressure_weight = pyo.Param(initialize=config.average_pressure_weight)
+    unit.average_temperature_weight = pyo.Param(initialize=config.average_temperature_weight)
     unit.g = pyo.Param(initialize=9.80665, units=units.m/units.s**2) #m/s^2
     unit.height_change = pyo.Param(initialize=config.height_change, units=units.m) #m
     unit.max_pressure = pyo.Param(initialize=config.max_pressure, units=units.Pa) #Pa
 
 def add_variables(unit,config):
     #diameter variable
-    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,5), initialize=1, units=units.m,)
+    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,5), initialize=1, units=units.m,)
     unit.roughness = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,0.1), initialize=0.0018, units=units.m)
     unit.area = pyo.Expression(expr=3.1415926*unit.diameter**2/4)
     
 #adding variables and constraints
 def add_equations(unit,config):
-    #create local variables for
+    #create local variables
     inlet = unit.control_volume.properties_in[0]
     outlet = unit.control_volume.properties_out[0]
     average = unit.control_volume.properties_avg
+    epsilon = 1e-7
 
     #create a set of slack variables for feasibility problem
     num_slacks=4
@@ -141,7 +146,7 @@ def add_equations(unit,config):
 
     #average temperature 5
     unit.average_temperature = pyo.Constraint(expr=
-        average.temperature==unit.average_weight*inlet.temperature+(1-unit.average_weight)*outlet.temperature
+        average.temperature==unit.average_temperature_weight*inlet.temperature+(1-unit.average_temperature_weight)*outlet.temperature
         )
 
     #inlet pressure density ratio
@@ -173,7 +178,7 @@ def add_equations(unit,config):
         )
     unit.constant_average_pressure.deactivate()
     unit.linear_average_pressure = pyo.Constraint(expr=
-        average.pressure==unit.average_weight*inlet.pressure+(1-unit.average_weight)*outlet.pressure +unit.spos[1]-unit.sneg[1]
+        average.pressure==unit.average_pressure_weight*inlet.pressure+(1-unit.average_pressure_weight)*outlet.pressure +unit.spos[1]-unit.sneg[1]
         )
     unit.linear_average_pressure.deactivate()
     unit.nonlinear_average_pressure = pyo.Constraint(expr=
@@ -189,7 +194,8 @@ def add_equations(unit,config):
 
     #average reynolds number
     average.Re = pyo.Expression(expr=
-        smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"])
+        smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
+        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+epsilon
         )
 
     #average friction factor
@@ -272,7 +278,7 @@ def guess_scales(unit):
     average = unit.control_volume.properties_avg
     
     #variable and parameter scaling factors
-    set_scaling_factor(unit.diameter,1e1)
+    set_scaling_factor(unit.diameter,1e2)
     set_scaling_factor(unit.length,1e-3)
     set_scaling_factor(unit.roughness,1e2)
     set_scaling_factor(unit.ambient_temperature,1e-2)
@@ -442,7 +448,7 @@ class pipelineData(UnitModelBlockData):
                 "outlet temperature (K)":pyo.value(self.outlet.temperature[0]),
                 "outlet velocity (m/s)":pyo.value(self.control_volume.properties_out[0].velocity),
                 "outlet density (kg/m3)":pyo.value(self.control_volume.properties_out[0].dens_mass),
-                "average pressure (bar)":pyo.value(self.control_volume.properties_avg.pressure),
+                "average pressure (bar)":pyo.value(self.control_volume.properties_avg.pressure)/100000,
                 "average temperature (K)":pyo.value(self.control_volume.properties_avg.temperature),
                 "average velocity (m/s)":pyo.value(self.control_volume.properties_avg.velocity),
                 "average density (kg/m3)":pyo.value(self.control_volume.properties_avg.dens_mass),

@@ -1,0 +1,2 @@
+
+C:\Users\charl\AppData\Local\Temp\tmpy_f23bz5.pyomo -AMPL linear_solver=ma57 tol=1e-07 nlp_scaling_method=gradient-based 	1775436132197743800	n	232	m	263

@@ -40,7 +40,8 @@ pipeline_config = {
         "ambient_temperature":293.15,
         "average_pressure_type":'linear',
         "heat_balance_type":'nonisothermal',
-        "average_weight":0.5,
+        "average_pressure_weight":0.5,
+        "average_temperature_weight":0.0,
         "height_change":0,
         }
 
@@ -396,6 +397,17 @@ m.fs.pipe7.diameter.unfix()
 m.fs.pipe8.diameter.unfix()
 m.fs.pipe9.diameter.unfix()
 
+#test constraints
+#m.fs.pipe5.inlet.flow_mass[0].fix(0)
+#m.comp1_max_w_constraint = pyo.Constraint(expr=m.fs.comp1.work_mechanical[0]<=50000000)
+#m.fs.pipe6.diameter.fix(0.0032)
+
+#constraint total production rate
+m.total_oil_prod_constraint = pyo.Constraint(
+    expr=1000000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD
+)
+m.total_oil_prod_constraint.deactivate()
+
 #new objective function
 m.opex = pyo.Expression(
         expr= 365*24*3600* 4E-8*(m.fs.comp1.work_mechanical[0])
@@ -410,12 +422,14 @@ m.capex = pyo.Expression(
     expr= m.fs.comp1.costing.capital_cost+m.fs.pipe1.costing.capital_cost+m.fs.pipe2.costing.capital_cost+m.fs.pipe3.costing.capital_cost+m.fs.pipe4.costing.capital_cost+m.fs.pipe5.costing.capital_cost+m.fs.pipe6.costing.capital_cost+m.fs.pipe7.costing.capital_cost+m.fs.pipe8.costing.capital_cost+m.fs.pipe9.costing.capital_cost
 )
 m.obj = pyo.Objective(
-    expr=0.1*m.capex+m.opex+m.raw_mats-m.revenue
+    expr=(0.1*m.capex+m.opex+m.raw_mats-m.revenue)/1000000
 )
 
 solver2 = pyo.SolverFactory('ipopt')
-solver2.options['linear_solver']='ma97'
+solver2.options['linear_solver']='ma27'
 solver2.options['tol']=1E-8
+solver2.options['acceptable_tol']=1E-7
+solver2.options['halt_on_ampl_error']='yes'
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
@@ -423,7 +437,11 @@ scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 res=solver2.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
-#m.display()
+
+import contextlib
+with open('temps/flowsheet_5_postsolve_display.txt', 'w') as f:
+    with contextlib.redirect_stdout(f):
+        m.display()
 
 pyo.assert_optimal_termination(res)
 

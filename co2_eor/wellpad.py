@@ -184,9 +184,9 @@ def add_equations(unit,name,config):
                     unit.spos[2]-unit.sneg[2]
             ) #constraint 4
     """
-    #combine above to say that reservoir state flow_vol (m3/s) == dacrys law eqn (m3/s)
+    #combine above to say that injection state flow_vol (m3/s) == dacrys law eqn (m3/s)
     unit.darcys_law = pyo.Constraint(
-        expr=reservoir_state.flow_vol==
+        expr=injection_state.flow_vol==
                 unit.kovr/reservoir_state.visc_d_phase["Liq"]*(injection_state.pressure-reservoir_state.pressure)+
                         unit.spos[2]-unit.sneg[2]
     )
@@ -194,7 +194,7 @@ def add_equations(unit,name,config):
     #sensitivity curve correction factor
     if config.use_correction_factor:
         unit.correction_factor = pyo.Expression(
-                expr=(1-pyo.exp(-unit.SC_B*unit.q_CO2_INJ))/(1-pyo.exp(-unit.SC_B*unit.IR_base))
+                expr=(1-pyo.exp(-unit.SC_B*reservoir_state.flow_vol*6.29))/(1-pyo.exp(-unit.SC_B*unit.IR_base))
                 )
     else:
         unit.correction_factor = pyo.Expression(expr=1)
@@ -367,8 +367,8 @@ class wellpadData(UnitModelBlockData):
         print(f'Inlet temperature: {pyo.value(self.inlet.temperature[0])}')
         print(f'Injection pressure: {pyo.value(self.control_volume.injection_state.pressure)/100000}')
         print(f'Injection temperature: {pyo.value(self.control_volume.injection_state.temperature)}')
-        print(f'Reservoir pressure: {pyo.value(self.reservoir_state.pressure[0])/100000}')
-        print(f'Reservoir temperature: {pyo.value(self.reservoir_state.temperature[0])}')
+        print(f'Reservoir pressure: {pyo.value(self.control_volume.reservoir_state.pressure)/100000}')
+        print(f'Reservoir temperature: {pyo.value(self.control_volume.reservoir_state.temperature)}')
         print()
 
 
