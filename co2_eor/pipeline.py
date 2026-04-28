@@ -27,7 +27,7 @@ def make_pipeline_config_block(config):
             )
     config.declare(
             "length",
-            ConfigValue(default=20000,domain=float)
+            ConfigValue(default=5000,domain=float)
             )
     config.declare(
             "alpha", #ambient heat transfer coefficient
@@ -41,7 +41,7 @@ def make_pipeline_config_block(config):
             ConfigValue(default=0.5,domain=float)
             )
     config.declare("average_temperature_weight",
-            ConfigValue(default=0,domain=float)
+            ConfigValue(default=0.5,domain=float)
             )
     config.declare(
             "height_change",
@@ -116,7 +116,7 @@ def add_equations(unit,config):
     #inlet velocity 
     inlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
     outlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
-    #average.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
+    average.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
 
     #"easy" equality constraints/expressions
     
@@ -141,12 +141,12 @@ def add_equations(unit,config):
         )
 
     #average velocity
-    average.velocity = pyo.Expression(expr=
-        average.flow_mass/average.dens_mass/unit.area
-        )
-    #unit.average_velocity = pyo.Constraint(expr=
-    #    average.velocity*unit.area*average.dens_mass==average.flow_mass
+    #average.velocity = pyo.Expression(expr=
+    #    average.flow_mass/average.dens_mass/unit.area
     #    )
+    unit.average_velocity = pyo.Constraint(expr=
+        average.velocity*unit.area*average.dens_mass==average.flow_mass
+        )
 
     #average temperature 5
     unit.average_temperature = pyo.Constraint(expr=

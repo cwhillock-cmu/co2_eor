@@ -95,6 +95,7 @@ class EnergySplittingType(Enum):
     equal_temperature = 1
     equal_molar_enthalpy = 2
     enthalpy_split = 3
+    total_enthalpy_split = 4
 
 
 class SeparatorScaler(CustomScalerBase):
