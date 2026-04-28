@@ -90,7 +90,7 @@ def add_params(unit,config):
 
 def add_variables(unit,config):
     #diameter variable
-    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,5), initialize=1, units=units.m,)
+    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.0,5), initialize=1, units=units.m,)
     unit.roughness = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,0.1), initialize=0.0018, units=units.m)
     unit.area = pyo.Expression(expr=3.1415926*unit.diameter**2/4)
     
@@ -116,7 +116,7 @@ def add_equations(unit,config):
     #inlet velocity 
     inlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
     outlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
-    average.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
+    #average.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
 
     #"easy" equality constraints/expressions
     
@@ -144,8 +144,11 @@ def add_equations(unit,config):
     #average.velocity = pyo.Expression(expr=
     #    average.flow_mass/average.dens_mass/unit.area
     #    )
-    unit.average_velocity = pyo.Constraint(expr=
-        average.velocity*unit.area*average.dens_mass==average.flow_mass
+    #unit.average_velocity = pyo.Constraint(expr=
+    #    average.velocity*unit.area*average.dens_mass==average.flow_mass
+    #    )
+    average.velocity = pyo.Expression(expr=
+        0.5*(inlet.velocity+outlet.velocity)
         )
 
     #average temperature 5
@@ -312,7 +315,7 @@ def guess_scales(unit):
     set_scaling_factor(unit.constant_average_pressure,1e-7)
     set_scaling_factor(unit.linear_average_pressure,1e-7)
     set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
-    set_scaling_factor(unit.hydraulic,1e-12)
+    set_scaling_factor(unit.hydraulic,1e-10)
     set_scaling_factor(unit.isothermal_inlet,1e-2)
     set_scaling_factor(unit.nonisothermal,1e-2)
     set_scaling_factor(unit.isothermal_ambient,1e-2)

@@ -18,6 +18,8 @@ COPY FILE FOR CO2_EOR
 Changes:
     1. Couldn't figure out how to add a MomentumBalanceType object/enum so remapped None to add inequality constraint
         All outlet pressures less than or equal to inlet pressure
+    2. added custom enthalpy split
+    3. added custom equal molar enthalpy
 """
 
 from enum import Enum
@@ -95,7 +97,8 @@ class EnergySplittingType(Enum):
     equal_temperature = 1
     equal_molar_enthalpy = 2
     enthalpy_split = 3
-    total_enthalpy_split = 4
+    custom_enthalpy_split = 4
+    custom_equal_molar_enthalpy = 5
 
 
 class SeparatorScaler(CustomScalerBase):
@@ -1390,6 +1393,17 @@ objects linked the mixed state and all outlet states,
                 o_block = getattr(self, o + "_state")
                 return mixed_block[t].enth_mol == o_block[t].enth_mol
 
+        elif self.config.energy_split_basis == EnergySplittingType.custom_equal_molar_enthalpy:
+
+            @self.Constraint(
+                self.flowsheet().time,
+                self.outlet_idx,
+                doc="Molar enthalpy equality constraint",
+            )
+            def molar_enthalpy_equality_eqn(b, t, o):
+                o_block = getattr(self, o + "_state")
+                return mixed_block[t].enth_mol*o_block[t].flow_mol == o_block[t].enth_mol*o_block[t].flow_mol
+
         elif self.config.energy_split_basis == EnergySplittingType.enthalpy_split:
             # Validate split fraction type
             if (
@@ -1420,6 +1434,18 @@ objects linked the mixed state and all outlet states,
                 ) == sum(
                     o_block[t].get_enthalpy_flow_terms(p) for p in o_block.phase_list
                 )
+            
+        elif self.config.energy_split_basis == EnergySplittingType.custom_enthalpy_split:
+            @self.Constraint(
+                    self.flowsheet().time,
+                    doc="custom enthalpy splitting constraint",
+            )
+            def custom_enthalpy_splitting_eqn(b,t):
+                rhs= 0
+                for o in self.outlet_idx:
+                    o_block = getattr(self,o+"_state")
+                    rhs+=o_block[t].flow_mol*o_block[t].enth_mol
+                return mixed_block[t].enth_mol*mixed_block[t].flow_mol==rhs
 
         else:
             raise BurntToast(

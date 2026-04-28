@@ -53,7 +53,7 @@ mixer_config = {
 splitter_config = {
         "property_package":m.fs.props,
         "ideal_separation":False,
-        "energy_split_basis":EnergySplittingType.enthalpy_split,
+        "energy_split_basis":EnergySplittingType.equal_molar_enthalpy,
         "momentum_balance_type":MomentumBalanceType.none,
         }
 
@@ -191,7 +191,7 @@ m.fs.comp1.inlet.temperature[0].fix(298)
 
 #pre initialization dof
 m.fs.comp1.outlet.pressure[0].fix(300*100000)
-m.fs.comp1.inlet.flow_mass[0].fix(0.01)
+m.fs.comp1.inlet.flow_mass[0].fix(0.005)
 
 #initialize
 
@@ -243,16 +243,10 @@ m.fs.pipe2.diameter.unfix()
 m.fs.pipe3.diameter.unfix()
 m.fs.pipe4.diameter.unfix()
 
-#test constraints
-#m.fs.pipe3.inlet.flow_mass[0].fix(0)
-#m.comp1_max_w_constraint = pyo.Constraint(expr=m.fs.comp1.work_mechanical[0]<=50000000)
-#m.fs.pipe4.diameter.fix(0.0)
-
 #constraint total production rate
 m.total_oil_prod_constraint = pyo.Constraint(
-    expr=500000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD
+    expr=100000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD
 )
-m.total_oil_prod_constraint.deactivate()
 
 #new objective function
 m.opex = pyo.Expression(
@@ -262,7 +256,7 @@ m.raw_mats = pyo.Expression(
     expr=365*24*3600* 0.045*m.fs.pipe1.inlet.flow_mass[0]
 )
 m.revenue = pyo.Expression(
-    expr=365*24*3600* 70*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD)
+    expr=365*24*3600* 75*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD)
 )
 m.capex = pyo.Expression(
     expr= m.fs.comp1.costing.capital_cost+m.fs.pipe1.costing.capital_cost+m.fs.pipe2.costing.capital_cost+m.fs.pipe3.costing.capital_cost+m.fs.pipe4.costing.capital_cost
@@ -271,20 +265,39 @@ m.obj = pyo.Objective(
     expr=(0.1*m.capex+m.opex+m.raw_mats-m.revenue)/1000000
 )
 
-solver2 = pyo.SolverFactory('ipopt')
-solver2.options['linear_solver']='ma97'
-solver2.options['tol']=1E-8
-solver2.options['acceptable_tol']=1E-6
-solver2.options['halt_on_ampl_error']='yes'
+#test constraints
+#m.fs.pipe3.inlet.flow_mass[0].fix(0)
+m.comp1_max_w_constraint = pyo.Constraint(expr=m.fs.comp1.work_mechanical[0]<=50000000)
+#m.fs.pipe3.diameter.fix(0.0)
+m.total_oil_prod_constraint.deactivate()
+
+ipopt = pyo.SolverFactory('ipopt')
+ipopt.options['linear_solver']='ma27'
+ipopt.options['tol']=1E-8
+ipopt.options['acceptable_tol']=1E-6
+ipopt.options['halt_on_ampl_error']='yes'
+snopt = pyo.SolverFactory('snopt')
+snopt.options['outlev']=2
+snopt.options['major_iterations_limit'] = 10000
+snopt.options['major_feasibility_tolerance']=1e-8
+minos = pyo.SolverFactory('minos')
+minos.options['outlev']=2
+conopt=pyo.SolverFactory('conopt')
+conopt.options['outlev']=2
+baron = pyo.SolverFactory('baron')
+
+import contextlib
+with open('temps/flowsheet_6_presolve_pprint.txt', 'w') as f:
+    with contextlib.redirect_stdout(f):
+        m.pprint()
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=solver2.solve(scaled_m,tee=True)
+res=ipopt.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
-import contextlib
 with open('temps/flowsheet_6_postsolve_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
