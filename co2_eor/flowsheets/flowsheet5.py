@@ -41,7 +41,7 @@ pipeline_config = {
         "average_pressure_type":'linear',
         "heat_balance_type":'nonisothermal',
         "average_pressure_weight":0.5,
-        "average_temperature_weight":0.0,
+        "average_temperature_weight":0.5,
         "height_change":0,
         }
 
@@ -398,15 +398,15 @@ m.fs.pipe8.diameter.unfix()
 m.fs.pipe9.diameter.unfix()
 
 #test constraints
-#m.fs.pipe5.inlet.flow_mass[0].fix(0)
+m.fs.pipe5.inlet.flow_mass[0].fix(0)
 #m.comp1_max_w_constraint = pyo.Constraint(expr=m.fs.comp1.work_mechanical[0]<=50000000)
 #m.fs.pipe6.diameter.fix(0.0032)
 
 #constraint total production rate
 m.total_oil_prod_constraint = pyo.Constraint(
-    expr=1000000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD
+    expr=500000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD
 )
-m.total_oil_prod_constraint.deactivate()
+#m.total_oil_prod_constraint.deactivate()
 
 #new objective function
 m.opex = pyo.Expression(
@@ -426,9 +426,9 @@ m.obj = pyo.Objective(
 )
 
 solver2 = pyo.SolverFactory('ipopt')
-solver2.options['linear_solver']='ma27'
+solver2.options['linear_solver']='ma97'
 solver2.options['tol']=1E-8
-solver2.options['acceptable_tol']=1E-7
+solver2.options['acceptable_tol']=1E-6
 solver2.options['halt_on_ampl_error']='yes'
 
 #scale model

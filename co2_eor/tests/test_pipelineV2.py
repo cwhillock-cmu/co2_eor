@@ -19,7 +19,7 @@ m.fs.pipe = pipeline(
         average_pressure_type='linear',
         heat_balance_type='nonisothermal',
         average_pressure_weight=0.5,
-        average_temperature_weight=0.0,
+        average_temperature_weight=0.5,
         height_change=0,
         )
 
@@ -28,7 +28,7 @@ m.fs.pipe = pipeline(
 #m.fs.pipe.outlet_supercritical.deactivate()
 
 #fix degrees of freedom
-m.fs.pipe.diameter.fix(0.005)
+m.fs.pipe.diameter.fix(0.05)
 m.fs.pipe.roughness.fix(0.0475e-3)
 m.fs.pipe.inlet.pressure[0].fix(340*100000)
 m.fs.pipe.inlet.temperature[0].fix(273.15+50)
@@ -42,7 +42,7 @@ flowsheet_solver.options['linear_solver']='ma97'
 
 m.fs.pipe.initialize(solver=flowsheet_solver,tee=True,display_after=True)
 
-m.obj = pyo.Objective(expr=m.fs.pipe.Pdrop/100000)
+m.obj = pyo.Objective(expr=m.fs.pipe.Pdrop**2/10000)
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
