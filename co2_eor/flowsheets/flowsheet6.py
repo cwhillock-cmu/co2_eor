@@ -268,8 +268,8 @@ m.obj = pyo.Objective(
 #test constraints
 #m.fs.pipe3.inlet.flow_mass[0].fix(0)
 m.comp1_max_w_constraint = pyo.Constraint(expr=m.fs.comp1.work_mechanical[0]<=50000000)
-#m.fs.pipe3.diameter.fix(0.0)
-m.total_oil_prod_constraint.deactivate()
+m.fs.pipe3.diameter.fix(0.0)
+#m.total_oil_prod_constraint.deactivate()
 
 ipopt = pyo.SolverFactory('ipopt')
 ipopt.options['linear_solver']='ma27'

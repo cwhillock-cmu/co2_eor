@@ -203,8 +203,8 @@ def add_equations(unit,config):
     average.Re = pyo.Expression(expr=
         #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
         #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
-        smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
-        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+epsilon
+        #smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
+        average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
         )
 
     #average friction factor
