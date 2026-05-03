@@ -92,7 +92,11 @@ def add_variables(unit,config):
     #diameter variable
     unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.0,5), initialize=1, units=units.m,)
     unit.roughness = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,0.1), initialize=0.0018, units=units.m)
-    unit.area = pyo.Expression(expr=3.1415926*unit.diameter**2/4)
+    
+    unit.diameter_temp = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,5), initialize=1, units=units.m,)
+    unit.pipe_exists = pyo.Var(domain=pyo.Binary,initialize=1)
+
+    unit.area = pyo.Expression(expr=3.1415926*unit.diameter_temp**2/4)
     
 #adding variables and constraints
 def add_equations(unit,config):
@@ -114,8 +118,8 @@ def add_equations(unit,config):
     
     #create velocity variables
     #inlet velocity 
-    inlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
-    outlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
+    inlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0,bounds=(0,10), units=units.m/units.s)
+    outlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0,bounds=(0,10), units=units.m/units.s)
     #average.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0, units=units.m/units.s)
 
     #"easy" equality constraints/expressions
@@ -141,15 +145,15 @@ def add_equations(unit,config):
         )
 
     #average velocity
-    #average.velocity = pyo.Expression(expr=
-    #    average.flow_mass/average.dens_mass/unit.area
-    #    )
+    average.velocity = pyo.Expression(expr=
+        average.flow_mass/average.dens_mass/unit.area
+        )
     #unit.average_velocity = pyo.Constraint(expr=
     #    average.velocity*unit.area*average.dens_mass==average.flow_mass
     #    )
-    average.velocity = pyo.Expression(expr=
-        0.5*(inlet.velocity+outlet.velocity)
-        )
+    #average.velocity = pyo.Expression(expr=
+    #    0.5*(inlet.velocity+outlet.velocity)
+    #    )
 
     #average temperature 5
     unit.average_temperature = pyo.Constraint(expr=
@@ -176,6 +180,21 @@ def add_equations(unit,config):
     average.q = pyo.Expression(expr=
         unit.alpha*(unit.ambient_temperature-average.temperature)
         )
+    
+    #binary logic
+    unit.binary_logic = pyo.ConstraintList()
+    unit.binary_logic.add(expr=unit.diameter - unit.diameter_temp >= -5*(1-unit.pipe_exists))
+    unit.binary_logic.add(expr= unit.diameter - unit.diameter_temp <= 5*(1-unit.pipe_exists))
+    unit.binary_logic.add(expr=unit.diameter <= 5*unit.pipe_exists)
+    unit.binary_logic.add(expr= inlet.velocity <= 10*(unit.pipe_exists))
+    unit.binary_logic.add(expr= outlet.velocity <= 10*(unit.pipe_exists))
+    unit.binary_logic.add(expr= inlet.flow_mass <= (200000)*(unit.pipe_exists))
+    unit.binary_logic.add(expr= outlet.flow_mass <= (200000)*(unit.pipe_exists))
+    unit.binary_logic.add(expr= inlet.pressure-outlet.pressure <= (600*100000)*(unit.pipe_exists))
+    unit.binary_logic.add(expr= inlet.pressure-outlet.pressure >= -(600*100000)*(unit.pipe_exists))
+    unit.binary_logic.add(expr=inlet.flow_mass>=0)
+    unit.binary_logic.add(expr=outlet.flow_mass>=0)
+    unit.binary_logic.add(expr=average.flow_mass>=0)
 
     #"difficult" constraints/expressions
 
@@ -201,24 +220,24 @@ def add_equations(unit,config):
 
     #average reynolds number
     average.Re = pyo.Expression(expr=
-        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
-        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
-        #smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
-        average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
+        #average.dens_mass*average.velocity*unit.unit.diameter_temp/average.visc_d_phase["Liq"]
+        #average.dens_mass*average.velocity*unit.unit.diameter_temp/average.visc_d_phase["Liq"]
+        smooth_abs(average.dens_mass*average.velocity*unit.diameter_temp/average.visc_d_phase["Liq"],epsilon)
+        #average.dens_mass*average.velocity*unit.diameter_temp/average.visc_d_phase["Liq"]+1
         )
 
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
-        4*pyo.log10((unit.roughness/3.7/(unit.diameter+epsilon)+5.74/((average.Re)**0.9)))**(2) +unit.spos[2]-unit.sneg[2]
+        4*pyo.log10((unit.roughness/3.7/(unit.diameter_temp)+5.74/((average.Re)**0.9)))**(2) +unit.spos[2]-unit.sneg[2]
         )
     
     #hydraulic equation 7
     unit.hydraulic = pyo.Constraint(expr=
-        (inlet.pressure**2-outlet.pressure**2)*unit.diameter/2==
-            average.pressure*average.dens_mass*average.velocity**2*unit.length/(average.inverse_f*2)+
-                average.pressure*average.dens_mass*average.velocity**2*unit.diameter*pyo.log(inlet.pressure/outlet.pressure)-
-                    (average.dens_mass*average.velocity)**2*unit.diameter*(inlet.PD_ratio-outlet.PD_ratio)+
-                        average.pressure*average.dens_mass*unit.diameter*unit.g*unit.height_change+
+        (inlet.pressure**2-outlet.pressure**2)/2==
+            average.pressure*average.dens_mass*average.velocity**2*unit.length/(unit.diameter_temp*average.inverse_f*2)+
+                average.pressure*average.dens_mass*average.velocity**2*pyo.log(inlet.pressure/outlet.pressure)-
+                    (average.dens_mass*average.velocity)**2*(inlet.PD_ratio-outlet.PD_ratio)+
+                        average.pressure*average.dens_mass*unit.g*unit.height_change+
                             unit.spos[3]-unit.sneg[3]
         )
     
@@ -228,7 +247,7 @@ def add_equations(unit,config):
         )
     unit.isothermal_inlet.deactivate()
     unit.nonisothermal = pyo.Constraint(expr=
-        (outlet.enth_mass - inlet.enth_mass)*average.dens_mass*average.velocity*unit.diameter==
+        (outlet.enth_mass - inlet.enth_mass)*average.dens_mass*average.velocity*unit.diameter_temp==
             4*average.q*unit.length +(unit.spos[4]-unit.sneg[4])
         )
     unit.nonisothermal.deactivate()
@@ -262,18 +281,35 @@ def add_equations(unit,config):
             expr=#unit.diameter*inlet.temperature_sat>=inlet.temperature_crit*unit.diameter
             inlet.temperature_sat>=inlet.temperature_crit
             )
+    unit.average_supercritical = pyo.Constraint(
+            expr=#unit.diameter*average.temperature_sat>=average.temperature_crit*unit.diameter
+            average.temperature_sat>=average.temperature_crit
+            )
     unit.inlet_pressure_max = pyo.Constraint(
         expr=inlet.pressure<=unit.max_pressure
     )
     unit.outlet_pressure_max = pyo.Constraint(
         expr=outlet.pressure<=unit.max_pressure
     )
+    unit.inlet_pressure_min = pyo.Constraint(
+        expr=inlet.pressure>=inlet.pressure_crit
+        #inlet.pressure>=74*100000
+    )
+    unit.outlet_pressure_min = pyo.Constraint(
+        expr=outlet.pressure>=outlet.pressure_crit
+        #outlet.pressure>=74*100000
+    )
+    unit.average_pressure_min = pyo.Constraint(
+        expr=average.pressure>=average.pressure_crit
+        #average.pressure>=74*100000
+    )
+
 
     #mach number constraint
     average.M = pyo.Expression(expr=average.velocity/average.speed_sound_phase["Liq"])
     unit.mach_number_constraint = pyo.Constraint(
             expr=unit.length<=
-                unit.diameter*average.inverse_f/(4*average.heat_capacity_ratio)*
+                unit.diameter_temp*average.inverse_f/(4*average.heat_capacity_ratio)*
                     ((1-average.M**2)/average.M**2+(1+average.heat_capacity_ratio)/2*
                         safe_log(average.M**2)/(2/(average.heat_capacity_ratio+1)/(1+(average.heat_capacity_ratio-1)/2*average.M**2)))
             )
@@ -290,6 +326,7 @@ def guess_scales(unit):
     
     #variable and parameter scaling factors
     set_scaling_factor(unit.diameter,1e2)
+    set_scaling_factor(unit.diameter_temp,1e2)
     set_scaling_factor(unit.length,1e-3)
     set_scaling_factor(unit.roughness,1e2)
     set_scaling_factor(unit.ambient_temperature,1e-2)
@@ -364,6 +401,8 @@ class pipelineData(UnitModelBlockData):
 
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'initializing {self.name}')
+        if pyo.is_fixed(self.pipe_exists) and pyo.value(self.pipe_exists)<= 0.01:
+            return
         #initialize outlet variables as inlet variables
         """
         self.outlet.pressure[0].value = self.inlet.pressure[0].value*0.98
@@ -374,6 +413,7 @@ class pipelineData(UnitModelBlockData):
         #self.control_volume.properties_in[0].velocity.value=0
         #self.control_volume.properties_out[0].velocity.value=0
         #self.control_volume.properties_avg.velocity.value=0
+        self.pipe_exists.fix(1)
         #activate feasibility problem
         self.activate_feasibility_problem()
         #scale model
@@ -394,12 +434,13 @@ class pipelineData(UnitModelBlockData):
         autoScaler=AutoScaler(overwrite=True)
         autoScaler.scale_variables_by_magnitude(self)
         #autoScaler.scale_constraints_by_jacobian_norm(self)
+        self.pipe_exists.unfix()
         print(f'{self.name} initialization complete')
 
     def print_parameters(self):
         print(f'{self.name} parameters')
+        print(f'pipe exists?:{pyo.value(self.pipe_exists)}')
         print(f'length: {pyo.value(self.length)} m')
-        print(f'diameter: {pyo.value(self.diameter)} m')
         print(f'roughness: {pyo.value(self.roughness)} m')
         print(f'heat transfer coefficient: {pyo.value(self.alpha)} W/m2*K')
         print(f'ambient temperature: {pyo.value(self.ambient_temperature)} K')
@@ -408,6 +449,8 @@ class pipelineData(UnitModelBlockData):
 
     def print_variables(self):
         print(f'{self.name} variables')
+        print(f'diameter: {pyo.value(self.diameter)} m')
+        print(f'temp var diameter: {pyo.value(self.diameter_temp)} m')
         print(f'Flowrate: {pyo.value(self.inlet.flow_mass[0])} kg/s')
         print(f'Inlet Pressure: {pyo.value(self.inlet.pressure[0])/100000} bar')
         print(f'Inlet Temperature: {pyo.value(self.inlet.temperature[0])} K')
@@ -447,6 +490,7 @@ class pipelineData(UnitModelBlockData):
         data = {
                 "length (m)":pyo.value(self.length),
                 "diameter (m)":pyo.value(self.diameter),
+                "temp var diameter (m)":pyo.value(self.diameter_temp),
                 "roughness (m)":pyo.value(self.roughness),
                 "alpha (W/m2/K)":pyo.value(self.alpha),
                 "ambient temperature (K)":pyo.value(self.ambient_temperature),

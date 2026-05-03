@@ -28,21 +28,23 @@ m.fs.pipe = pipeline(
 #m.fs.pipe.outlet_supercritical.deactivate()
 
 #fix degrees of freedom
-m.fs.pipe.diameter.fix(0.05)
+#m.fs.pipe.diameter.fix(0.05)
+#m.fs.pipe.pipe_exists.fix(0)
 m.fs.pipe.roughness.fix(0.0475e-3)
 m.fs.pipe.inlet.pressure[0].fix(340*100000)
 m.fs.pipe.inlet.temperature[0].fix(273.15+50)
 #m.fs.pipe.control_volume.properties_in[0].velocity.fix(3)
-m.fs.pipe.inlet.flow_mass[0].fix(0)
+#m.fs.pipe.inlet.flow_mass[0].fix(3)
 
-assert idaescore.util.model_statistics.degrees_of_freedom(m)==0
+#assert idaescore.util.model_statistics.degrees_of_freedom(m)==0
 
-flowsheet_solver = pyo.SolverFactory("ipopt")
+flowsheet_solver = pyo.SolverFactory("bonmin")
 flowsheet_solver.options['linear_solver']='ma97'
 
 m.fs.pipe.initialize(solver=flowsheet_solver,tee=True,display_after=True)
 
-m.obj = pyo.Objective(expr=m.fs.pipe.Pdrop**2/10000)
+#m.obj = pyo.Objective(expr=m.fs.pipe.Pdrop**2/10000)
+m.obj = pyo.Objective(expr=m.fs.pipe.diameter*10)
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)

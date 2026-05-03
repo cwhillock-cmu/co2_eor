@@ -243,9 +243,14 @@ m.fs.pipe2.diameter.unfix()
 m.fs.pipe3.diameter.unfix()
 m.fs.pipe4.diameter.unfix()
 
+#m.fs.pipe1.pipe_exists.fix(1)
+#m.fs.pipe2.pipe_exists.fix(1)
+#m.fs.pipe3.pipe_exists.fix(0)
+#m.fs.pipe4.pipe_exists.fix(1)
+
 #constraint total production rate
 m.total_oil_prod_constraint = pyo.Constraint(
-    expr=100000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD
+    expr=200000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD
 )
 
 #new objective function
@@ -253,10 +258,10 @@ m.opex = pyo.Expression(
         expr= 365*24*3600* 4E-8*(m.fs.comp1.work_mechanical[0])
         )
 m.raw_mats = pyo.Expression(
-    expr=365*24*3600* 0.045*m.fs.pipe1.inlet.flow_mass[0]
+    expr=365*24*3600* 0.0*m.fs.pipe1.inlet.flow_mass[0]
 )
 m.revenue = pyo.Expression(
-    expr=365*24*3600* 75*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD)
+    expr=365*24*3600* 80*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD)
 )
 m.capex = pyo.Expression(
     expr= m.fs.comp1.costing.capital_cost+m.fs.pipe1.costing.capital_cost+m.fs.pipe2.costing.capital_cost+m.fs.pipe3.costing.capital_cost+m.fs.pipe4.costing.capital_cost
@@ -267,15 +272,20 @@ m.obj = pyo.Objective(
 
 #test constraints
 #m.fs.pipe3.inlet.flow_mass[0].fix(0)
-m.comp1_max_w_constraint = pyo.Constraint(expr=m.fs.comp1.work_mechanical[0]<=50000000)
-m.fs.pipe3.diameter.fix(0.0)
-#m.total_oil_prod_constraint.deactivate()
+#m.fs.pipe3.diameter.fix(0.0)
+m.total_oil_prod_constraint.deactivate()
 
 ipopt = pyo.SolverFactory('ipopt')
 ipopt.options['linear_solver']='ma27'
 ipopt.options['tol']=1E-8
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['halt_on_ampl_error']='yes'
+bonmin = pyo.SolverFactory('bonmin')
+bonmin.options['linear_solver']='ma27'
+bonmin.options['tol']=1E-8
+bonmin.options['acceptable_tol']=1E-6
+bonmin.options['halt_on_ampl_error']='yes'
+bonmin.options['bonmin.algorithm']='B-QG'
 snopt = pyo.SolverFactory('snopt')
 snopt.options['outlev']=2
 snopt.options['major_iterations_limit'] = 10000
@@ -283,8 +293,21 @@ snopt.options['major_feasibility_tolerance']=1e-8
 minos = pyo.SolverFactory('minos')
 minos.options['outlev']=2
 conopt=pyo.SolverFactory('conopt')
-conopt.options['outlev']=2
+conopt.options['outlev']=3
+conopt.options['logfreq']=1
+conopt.options['hess']=0
 baron = pyo.SolverFactory('baron')
+LindoGlobal = pyo.SolverFactory('LindoGlobal')
+knitro = pyo.SolverFactory('knitro')
+knitro.options['convex']=0
+knitro.options['algorithm']=0
+knitro.options['gradopt']=3
+knitro.options['hessopt']=4
+knitro.options['honorbnds']=1
+knitro.options['eval_fcga']=0
+knitro.options['derivcheck']=0
+knitro.options['cg_precond']=0
+knitro.options['datacheck']=1
 
 import contextlib
 with open('temps/flowsheet_6_presolve_pprint.txt', 'w') as f:
@@ -294,7 +317,7 @@ with open('temps/flowsheet_6_presolve_pprint.txt', 'w') as f:
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=ipopt.solve(scaled_m,tee=True)
+res=knitro.solve(scaled_m,tee=True,keepfiles=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
