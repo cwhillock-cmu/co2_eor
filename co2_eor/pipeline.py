@@ -190,11 +190,13 @@ def add_equations(unit,config):
     unit.binary_logic.add(expr= outlet.velocity <= 10*(unit.pipe_exists))
     unit.binary_logic.add(expr= inlet.flow_mass <= (200000)*(unit.pipe_exists))
     unit.binary_logic.add(expr= outlet.flow_mass <= (200000)*(unit.pipe_exists))
+    unit.binary_logic.add(expr= average.flow_mass <= (200000)*(unit.pipe_exists))
     unit.binary_logic.add(expr= inlet.pressure-outlet.pressure <= (600*100000)*(unit.pipe_exists))
     unit.binary_logic.add(expr= inlet.pressure-outlet.pressure >= -(600*100000)*(unit.pipe_exists))
     unit.binary_logic.add(expr=inlet.flow_mass>=0)
     unit.binary_logic.add(expr=outlet.flow_mass>=0)
     unit.binary_logic.add(expr=average.flow_mass>=0)
+    unit.binary_logic.add(expr=inlet.pressure>=outlet.pressure)
 
     #"difficult" constraints/expressions
 

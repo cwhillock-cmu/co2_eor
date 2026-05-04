@@ -285,7 +285,7 @@ bonmin.options['linear_solver']='ma27'
 bonmin.options['tol']=1E-8
 bonmin.options['acceptable_tol']=1E-6
 bonmin.options['halt_on_ampl_error']='yes'
-bonmin.options['bonmin.algorithm']='B-QG'
+bonmin.options['bonmin.algorithm']='B-BB'
 snopt = pyo.SolverFactory('snopt')
 snopt.options['outlev']=2
 snopt.options['major_iterations_limit'] = 10000
@@ -297,12 +297,14 @@ conopt.options['outlev']=3
 conopt.options['logfreq']=1
 conopt.options['hess']=0
 baron = pyo.SolverFactory('baron')
-LindoGlobal = pyo.SolverFactory('LindoGlobal')
+LindoGlobal = pyo.SolverFactory('lindoglobal')
+LGO = pyo.SolverFactory('LGO')
 knitro = pyo.SolverFactory('knitro')
 knitro.options['convex']=0
-knitro.options['algorithm']=0
+knitro.options['algorithm']=6
 knitro.options['gradopt']=3
 knitro.options['hessopt']=4
+knitro.options['hessian_no_f']=0
 knitro.options['honorbnds']=1
 knitro.options['eval_fcga']=0
 knitro.options['derivcheck']=0
@@ -317,7 +319,7 @@ with open('temps/flowsheet_6_presolve_pprint.txt', 'w') as f:
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=knitro.solve(scaled_m,tee=True,keepfiles=True)
+res=bonmin.solve(scaled_m,tee=True,keepfiles=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
