@@ -113,6 +113,8 @@ def make_control_volume(unit,name,config):
 
 #adding parameters from config
 def add_params(unit,name,config):
+    unit.reservoir_temperature = pyo.Param(initialize=config.temperature)
+    unit.reservoir_pressure = pyo.Param(initialize=config.pressure)
     unit.Boi = pyo.Param(initialize=config.Boi)
     unit.GOR = pyo.Param(initialize=config.GOR)
     unit.PC_A = pyo.Param(initialize=config.PC_A)
@@ -136,8 +138,12 @@ def add_equations(unit,name,config):
     outlet=unit.control_volume.properties_out[0]
 
     #fix reservoir temperature and pressure
-    reservoir_state.pressure.fix(config.pressure)
-    reservoir_state.temperature.fix(config.temperature)
+    unit.reservoir_temperature_constraint = pyo.Constraint(
+        expr=reservoir_state.temperature==unit.reservoir_temperature
+    )
+    unit.reservoir_pressure_constraint = pyo.Constraint(
+        expr=reservoir_state.pressure==unit.reservoir_pressure
+    )
 
     #define HCPV
     unit.HCPV = pyo.Var(domain=pyo.NonNegativeReals)
@@ -250,6 +256,8 @@ def guess_scales(unit,name,config):
     outlet=unit.control_volume.properties_out[0]
 
     #parameter scales
+    set_scaling_factor(unit.reservoir_temperature,1e-2)
+    set_scaling_factor(unit.reservoir_pressure,1e-7)
     set_scaling_factor(unit.PC_A,10)
     set_scaling_factor(unit.PC_B,10)
     set_scaling_factor(unit.GB_A,10)
@@ -364,7 +372,7 @@ class wellpadData(UnitModelBlockData):
         print(f'HCPV: {pyo.value(self.HCPV)}')
         print(f'CO2 injection rate (kg/s): {pyo.value(self.inlet.flow_mass[0])}')
         print(f'Inlet pressure: {pyo.value(self.inlet.pressure[0])/100000}')
-        print(f'Inlet temperature: {pyo.value(self.inlet.temperature[0])}')
+        print(f'Inlet temperature: {pyo.value(self.control_volume.properties_in[0].temperature)}')
         print(f'Injection pressure: {pyo.value(self.control_volume.injection_state.pressure)/100000}')
         print(f'Injection temperature: {pyo.value(self.control_volume.injection_state.temperature)}')
         print(f'Reservoir pressure: {pyo.value(self.control_volume.reservoir_state.pressure)/100000}')
@@ -388,8 +396,8 @@ class wellpadData(UnitModelBlockData):
 
     def export_df(self):
         data = {
-                "reservoir temperature (K)":pyo.value(self.control_volume.reservoir_state.temperature),
-                "reservoir pressure (bar)": pyo.value(self.control_volume.reservoir_state.pressure)/100000,
+                "reservoir temperature (K)":pyo.value(self.reservoir_temperature),
+                "reservoir pressure (bar)": pyo.value(self.reservoir_pressure)/100000,
                 "oil volume factor (STB oil/RB oil)":pyo.value(self.Boi),
                 "gas oil ratio (RB gas/RB oil)":pyo.value(self.GOR),
                 "production curve fit parameter A":pyo.value(self.PC_A),
@@ -404,7 +412,7 @@ class wellpadData(UnitModelBlockData):
                 "unit CO2 injection rate (kg/s)":pyo.value(self.control_volume.injection_state.flow_mass),
                 "unit CO2 injection rate (Rb/s)":pyo.value(self.control_volume.injection_state.flow_vol*6.29),
                 "inlet pressure (bar)":pyo.value(self.inlet.pressure[0])/100000,
-                "inlet temperature (K)":pyo.value(self.inlet.temperature[0]),
+                "inlet temperature (K)":pyo.value(self.control_volume.properties_in[0].temperature),
                 "injection pressure (bar)":pyo.value(self.control_volume.injection_state.pressure)/100000,
                 "injection temperature (K)":pyo.value(self.control_volume.injection_state.temperature),
                 "correction factor":pyo.value(self.correction_factor),

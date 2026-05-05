@@ -21,7 +21,7 @@ m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)
 m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         pure_component="CO2",amount_basis=idaesHelmholtz.AmountBasis.MASS,
-        state_vars=idaesHelmholtz.StateVars.TPX,phase_presentation=idaesHelmholtz.PhaseType.L,
+        state_vars=idaesHelmholtz.StateVars.PH,phase_presentation=idaesHelmholtz.PhaseType.MIX,
         #has_phase_equilibrium=False,
         )
 
@@ -39,9 +39,9 @@ pipeline_config = {
         "alpha":5,
         "ambient_temperature":293.15,
         "average_pressure_type":'linear',
-        "heat_balance_type":'nonisothermal',
-        "average_pressure_weight":0.5,
-        "average_temperature_weight":0.5,
+        "heat_balance_type":'inlet',
+        "average_pressure_weight":0.0,
+        "average_temperature_weight":0.0,
         "height_change":0,
         }
 
@@ -187,7 +187,8 @@ print(f'D.o.F before specifying inlet conds={idaes.core.util.model_statistics.de
 
 #actual inlet specifications
 m.fs.comp1.inlet.pressure[0].fix(100*100000)
-m.fs.comp1.inlet.temperature[0].fix(298)
+#m.fs.comp1.inlet.temperature[0].fix(298)
+m.inlet_temp_constraint = pyo.Constraint(expr=m.fs.comp1.control_volume.properties_in[0].temperature==298)
 
 #pre initialization dof
 m.fs.comp1.outlet.pressure[0].fix(300*100000)
@@ -273,7 +274,7 @@ m.obj = pyo.Objective(
 #test constraints
 #m.fs.pipe3.inlet.flow_mass[0].fix(0)
 #m.fs.pipe3.diameter.fix(0.0)
-m.total_oil_prod_constraint.deactivate()
+#m.total_oil_prod_constraint.deactivate()
 
 ipopt = pyo.SolverFactory('ipopt')
 ipopt.options['linear_solver']='ma27'
@@ -281,7 +282,7 @@ ipopt.options['tol']=1E-8
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['halt_on_ampl_error']='yes'
 bonmin = pyo.SolverFactory('bonmin')
-bonmin.options['linear_solver']='ma27'
+bonmin.options['linear_solver']='ma97'
 bonmin.options['tol']=1E-8
 bonmin.options['acceptable_tol']=1E-6
 bonmin.options['halt_on_ampl_error']='yes'

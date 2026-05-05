@@ -293,6 +293,9 @@ def add_equations(unit,config):
     unit.outlet_pressure_max = pyo.Constraint(
         expr=outlet.pressure<=unit.max_pressure
     )
+    unit.average_pressure_max = pyo.Constraint(
+        expr=average.pressure<=unit.max_pressure
+    )
     unit.inlet_pressure_min = pyo.Constraint(
         expr=inlet.pressure>=inlet.pressure_crit
         #inlet.pressure>=74*100000
@@ -363,9 +366,14 @@ def guess_scales(unit):
     #auxiliary constraint scaling factors
     set_scaling_factor(unit.inlet_supercritical,1e-2)
     set_scaling_factor(unit.outlet_supercritical,1e-2)
+    set_scaling_factor(unit.average_supercritical,1e-2)
     set_scaling_factor(unit.mach_number_constraint,1e-3)
     set_scaling_factor(unit.inlet_pressure_max,1e-7)
     set_scaling_factor(unit.outlet_pressure_max,1e-7)
+    set_scaling_factor(unit.average_pressure_max,1e-7)
+    set_scaling_factor(unit.inlet_pressure_min,1e-7)
+    set_scaling_factor(unit.outlet_pressure_min,1e-7)
+    set_scaling_factor(unit.average_pressure_min,1e-7)
 
     
 #define pipeline class
@@ -455,10 +463,10 @@ class pipelineData(UnitModelBlockData):
         print(f'temp var diameter: {pyo.value(self.diameter_temp)} m')
         print(f'Flowrate: {pyo.value(self.inlet.flow_mass[0])} kg/s')
         print(f'Inlet Pressure: {pyo.value(self.inlet.pressure[0])/100000} bar')
-        print(f'Inlet Temperature: {pyo.value(self.inlet.temperature[0])} K')
+        print(f'Inlet Temperature: {pyo.value(self.control_volume.properties_in[0].temperature)} K')
         print(f'Inlet Velocity: {pyo.value(self.control_volume.properties_in[0].velocity)} m/s')
         print(f'Outlet Pressure: {pyo.value(self.outlet.pressure[0])/100000} bar')
-        print(f'Outlet Temperature: {pyo.value(self.outlet.temperature[0])} K')
+        print(f'Outlet Temperature: {pyo.value(self.control_volume.properties_out[0].temperature)} K')
         print(f'Outlet Velocity: {pyo.value(self.control_volume.properties_out[0].velocity)} m/s')
         print(f'Average Pressure: {pyo.value(self.control_volume.properties_avg.pressure)/100000} bar')
         print(f'Average Temperature: {pyo.value(self.control_volume.properties_avg.temperature)} K')
@@ -499,11 +507,11 @@ class pipelineData(UnitModelBlockData):
                 "height change":pyo.value(self.height_change),
                 "flowrate (kg/s)":pyo.value(self.inlet.flow_mass[0]),
                 "inlet pressure (bar)":pyo.value(self.inlet.pressure[0])/100000,
-                "inlet temperature (K)":pyo.value(self.inlet.temperature[0]),
+                "inlet temperature (K)":pyo.value(self.control_volume.properties_in[0].temperature),
                 "inlet velocity (m/s)":pyo.value(self.control_volume.properties_in[0].velocity),
                 "inlet density (kg/m3)":pyo.value(self.control_volume.properties_in[0].dens_mass),
                 "outlet pressure (bar)":pyo.value(self.outlet.pressure[0])/100000,
-                "outlet temperature (K)":pyo.value(self.outlet.temperature[0]),
+                "outlet temperature (K)":pyo.value(self.control_volume.properties_out[0].temperature),
                 "outlet velocity (m/s)":pyo.value(self.control_volume.properties_out[0].velocity),
                 "outlet density (kg/m3)":pyo.value(self.control_volume.properties_out[0].dens_mass),
                 "average pressure (bar)":pyo.value(self.control_volume.properties_avg.pressure)/100000,

@@ -9,9 +9,9 @@ def export_compressor_df(compressor):
     data = {
         "flowrate (kg/s)":pyo.value(compressor.inlet.flow_mass[0]),
         "inlet pressure (bar)":pyo.value(compressor.inlet.pressure[0]/100000),
-        "inlet temperature (K)":pyo.value(compressor.inlet.temperature[0]),
+        "inlet temperature (K)":pyo.value(compressor.control_volume.properties_in[0].temperature),
         "outlet pressure (bar)":pyo.value(compressor.outlet.pressure[0]/100000),
-        "outlet temperature (K)":pyo.value(compressor.outlet.temperature[0]),
+        "outlet temperature (K)":pyo.value(compressor.control_volume.properties_out[0].temperature),
         "Work Mecahnical (kW)":pyo.value(compressor.work_mechanical[0]/1000),
     }
     return pd.DataFrame(data,index=[compressor.name])
