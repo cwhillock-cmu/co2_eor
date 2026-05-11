@@ -21,7 +21,7 @@ m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)
 m.fs.props = idaesHelmholtz.HelmholtzParameterBlock(
         pure_component="CO2",amount_basis=idaesHelmholtz.AmountBasis.MASS,
-        state_vars=idaesHelmholtz.StateVars.PH,phase_presentation=idaesHelmholtz.PhaseType.MIX,
+        state_vars=idaesHelmholtz.StateVars.PH,phase_presentation=idaesHelmholtz.PhaseType.LG,
         #has_phase_equilibrium=False,
         )
 
