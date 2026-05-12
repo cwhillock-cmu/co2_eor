@@ -6,18 +6,12 @@ from pyomo.common.config import ConfigBlock, ConfigValue, In
 from idaes.core import (
     ControlVolume0DBlock,
     declare_process_block_class,
-    EnergyBalanceType,
-    MomentumBalanceType,
-    MaterialBalanceType,
     UnitModelBlockData,
     useDefault,
-    FlowsheetBlock,
 )
 from idaes.core.util.config import is_physical_parameter_block
 from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
-from pyomo.network import Arc
-from co2_eor import pipeline
 
 #specify configuration options
 def make_wellpad_config_block(config):
@@ -154,7 +148,7 @@ def add_equations(unit,name,config):
     unit.sneg = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.spos.fix(0)
     unit.sneg.fix(0)
-    #create feasibility expression and objective function\
+    #create feasibility expression and objective function
     unit.feasibility_expression = pyo.Expression(expr=pyo.quicksum(unit.spos[i]+unit.sneg[i] for i in range(1,num_slacks+1)))
     unit.feasibility_objective = pyo.Objective(expr=unit.feasibility_expression)
     unit.feasibility_objective.deactivate()
@@ -283,6 +277,8 @@ def guess_scales(unit,name,config):
     set_scaling_factor(outlet.flow_mass,1e1)
 
     #equality constraint scales
+    set_scaling_factor(unit.reservoir_temperature_constraint,1e-2)
+    set_scaling_factor(unit.reservoir_pressure_constraint,1e-7)
     set_scaling_factor(unit.inlet_injection_mass_bal,1e1)
     set_scaling_factor(unit.inlet_injection_temperature_bal,1e-2)
     set_scaling_factor(unit.inlet_injection_pressure_bal,1e-7)

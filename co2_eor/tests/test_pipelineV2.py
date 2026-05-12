@@ -28,8 +28,7 @@ m.fs.pipe = pipeline(
 #m.fs.pipe.outlet_supercritical.deactivate()
 
 #fix degrees of freedom
-#m.fs.pipe.diameter.fix(0.05)
-#m.fs.pipe.pipe_exists.fix(0)
+m.fs.pipe.diameter.fix(0.05)
 m.fs.pipe.roughness.fix(0.0475e-3)
 m.fs.pipe.inlet.pressure[0].fix(340*100000)
 m.fs.pipe.inlet.temperature[0].fix(273.15+50)
@@ -38,7 +37,7 @@ m.fs.pipe.inlet.temperature[0].fix(273.15+50)
 
 #assert idaescore.util.model_statistics.degrees_of_freedom(m)==0
 
-flowsheet_solver = pyo.SolverFactory("bonmin")
+flowsheet_solver = pyo.SolverFactory("ipopt")
 flowsheet_solver.options['linear_solver']='ma97'
 
 m.fs.pipe.initialize(solver=flowsheet_solver,tee=True,display_after=True)
@@ -55,8 +54,7 @@ pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
 m.fs.pipe.print_all()
 print(m.fs.pipe.export_df().to_string())
-#print(f'mach constraint body = {pyo.value(m.fs.pipe.mach_number_constraint.body)}')
-input()
+input('paused')
 inlet_temp_list=[20,25,30,35,40,45,50,55,60]
 pressure_drop_list = []
 T_change_list=[]

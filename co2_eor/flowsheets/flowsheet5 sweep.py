@@ -41,7 +41,7 @@ pipeline_config = {
         "average_pressure_type":'linear',
         "heat_balance_type":'nonisothermal',
         "average_pressure_weight":0.5,
-        "average_temperature_weight":0.5,
+        "average_temperature_weight":0.0,
         "height_change":0,
         }
 
@@ -70,7 +70,7 @@ welltype1_config = {
         "kovr":1.5E-14,
         "use_correction_factor":False,
         "BHP_max":300*100000,
-        "multiplier":6,
+        "multiplier":3,
         "depth":1000,
         }
 
@@ -87,7 +87,7 @@ welltype2_config = {
         "kovr":8.7E-15,
         "use_correction_factor":False,
         "BHP_max":320*100000,
-        "multiplier":4,
+        "multiplier":2,
         "depth":1000,
         }
 
@@ -104,7 +104,7 @@ welltype3_config={
         "kovr":0.2E-14,
         "use_correction_factor":False,
         "BHP_max":340*100000,
-        "multiplier":4,
+        "multiplier":2,
         "depth":1000,
         }
 
@@ -130,54 +130,127 @@ m.fs.comp1.costing = idaes.core.UnitModelCostingBlock(
     }
 )
 
-m.fs.pipe1 = pipeline(**pipeline_config,length=2000)
+m.fs.pipe1 = pipeline(**pipeline_config,length=3000)
 m.fs.pipe1.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
 m.fs.pipe1.diameter.fix(0.2)
 m.fs.pipe1.roughness.fix(0.0475e-3)
 
 m.fs.s1 = Arc(source=m.fs.comp1.outlet,destination=m.fs.pipe1.inlet)
 
-m.fs.split1 = splitter(**splitter_config,outlet_list=['to_pipe2','to_pipe3'])
+m.fs.split1 = splitter(**splitter_config,outlet_list=['to_pipe2','to_pipe4'])
 
 m.fs.s2 = Arc(source=m.fs.pipe1.outlet,destination=m.fs.split1.inlet)
 
-m.fs.pipe2 = pipeline(**pipeline_config,length=4000)
-m.fs.pipe2.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe2 = pipeline(**pipeline_config,length=1600)
+m.fs.pipe2.costing=idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
 m.fs.pipe2.diameter.fix(0.15)
 m.fs.pipe2.roughness.fix(0.0475e-3)
 
-m.fs.pipe3 = pipeline(**pipeline_config,length=1000)
-m.fs.pipe3.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
-m.fs.pipe3.diameter.fix(0.1)
-m.fs.pipe3.roughness.fix(0.0475e-3)
-
 m.fs.s3 = Arc(source=m.fs.split1.to_pipe2,destination=m.fs.pipe2.inlet)
-m.fs.s4 = Arc(source=m.fs.split1.to_pipe3,destination=m.fs.pipe3.inlet)
+
+m.fs.split2 = splitter(**splitter_config,outlet_list=['to_well1','to_pipe3'])
+
+m.fs.s4 = Arc(source=m.fs.pipe2.outlet,destination=m.fs.split2.inlet)
 
 m.fs.well1 = wellpad(**welltype3_config)
 m.fs.well1.HCPV.fix(0.5)
 
-m.fs.s5 = Arc(source=m.fs.pipe3.outlet,destination=m.fs.well1.inlet)
+m.fs.s5 = Arc(source=m.fs.split2.to_well1,destination=m.fs.well1.inlet)
 
-m.fs.split2 = splitter(**splitter_config,outlet_list=['to_well2','to_pipe4'])
+m.fs.pipe3 = pipeline(**pipeline_config,length=5600)
+m.fs.pipe3.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe3.diameter.fix(0.1)
+m.fs.pipe3.roughness.fix(0.0475e-3)
 
-m.fs.s6 = Arc(source=m.fs.pipe2.outlet,destination=m.fs.split2.inlet)
+m.fs.s6 = Arc(source=m.fs.split2.to_pipe3,destination=m.fs.pipe3.inlet)
 
-m.fs.well2 = wellpad(**welltype2_config)
+m.fs.well2 = wellpad(**welltype1_config)
 m.fs.well2.HCPV.fix(0.5)
 
-m.fs.pipe4 = pipeline(**pipeline_config,length=6000)
+m.fs.s7 = Arc(source=m.fs.pipe3.outlet,destination=m.fs.well2.inlet)
+
+m.fs.pipe4 = pipeline(**pipeline_config,length=1600)
 m.fs.pipe4.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
-m.fs.pipe4.diameter.fix(0.1)
+m.fs.pipe4.diameter.fix(0.15)
 m.fs.pipe4.roughness.fix(0.0475e-3)
 
-m.fs.s7 = Arc(source=m.fs.split2.to_well2,destination=m.fs.well2.inlet)
-m.fs.s8 = Arc(source=m.fs.split2.to_pipe4,destination=m.fs.pipe4.inlet)
+m.fs.s8 = Arc(source=m.fs.split1.to_pipe4,destination=m.fs.pipe4.inlet)
 
-m.fs.well3 = wellpad(**welltype1_config)
+m.fs.split3 = splitter(**splitter_config,outlet_list=['to_pipe5','to_pipe7'])
+
+m.fs.s9 = Arc(source=m.fs.pipe4.outlet,destination=m.fs.split3.inlet)
+
+m.fs.pipe5 = pipeline(**pipeline_config,length=800)
+m.fs.pipe5.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe5.diameter.fix(0.13)
+m.fs.pipe5.roughness.fix(0.0475e-3)
+
+m.fs.s10 = Arc(source=m.fs.split3.to_pipe5,destination=m.fs.pipe5.inlet)
+
+m.fs.split4 = splitter(**splitter_config,outlet_list=['to_well3','to_pipe6'])
+
+m.fs.s11 = Arc(source=m.fs.pipe5.outlet,destination=m.fs.split4.inlet)
+
+m.fs.well3 = wellpad(**welltype2_config)
 m.fs.well3.HCPV.fix(0.5)
 
-m.fs.s9 = Arc(source=m.fs.pipe4.outlet,destination=m.fs.well3.inlet)
+m.fs.s12 = Arc(source=m.fs.split4.to_well3,destination=m.fs.well3.inlet)
+
+m.fs.pipe6 = pipeline(**pipeline_config,length=1600)
+m.fs.pipe6.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe6.diameter.fix(0.1)
+m.fs.pipe6.roughness.fix(0.0475e-3)
+
+m.fs.s13 = Arc(source=m.fs.split4.to_pipe6,destination=m.fs.pipe6.inlet)
+
+m.fs.well4 = wellpad(**welltype3_config)
+m.fs.well4.HCPV.fix(0.5)
+
+m.fs.s14 = Arc(source=m.fs.pipe6.outlet,destination=m.fs.well4.inlet)
+
+m.fs.pipe7 = pipeline(**pipeline_config,length=800)
+m.fs.pipe7.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe7.diameter.fix(0.3)
+m.fs.pipe7.roughness.fix(0.0475e-3)
+
+m.fs.s15 = Arc(source=m.fs.split3.to_pipe7,destination=m.fs.pipe7.inlet)
+
+m.fs.split5 = splitter(**splitter_config,outlet_list=['to_well5','to_pipe8'])
+
+m.fs.s16 = Arc(source=m.fs.pipe7.outlet,destination=m.fs.split5.inlet)
+
+m.fs.well5 = wellpad(**welltype2_config)
+m.fs.well5.HCPV.fix(0.5)
+
+m.fs.s17 = Arc(source=m.fs.split5.to_well5,destination=m.fs.well5.inlet)
+
+m.fs.pipe8 = pipeline(**pipeline_config,length=1600)
+m.fs.pipe8.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe8.diameter.fix(0.13)
+m.fs.pipe8.roughness.fix(0.0475e-3)
+
+m.fs.s18 = Arc(source=m.fs.split5.to_pipe8,destination=m.fs.pipe8.inlet)
+
+m.fs.split6 = splitter(**splitter_config,outlet_list=['to_well6','to_pipe9'])
+
+m.fs.s19 = Arc(source=m.fs.pipe8.outlet,destination=m.fs.split6.inlet)
+
+m.fs.well6 = wellpad(**welltype3_config)
+m.fs.well6.HCPV.fix(0.5)
+
+m.fs.s20 = Arc(source=m.fs.split6.to_well6,destination=m.fs.well6.inlet)
+
+m.fs.pipe9 = pipeline(**pipeline_config,length=800)
+m.fs.pipe9.costing = idaes.core.UnitModelCostingBlock(**pipeline_costing_config)
+m.fs.pipe9.diameter.fix(0.1)
+m.fs.pipe9.roughness.fix(0.0475e-3)
+
+m.fs.s21 = Arc(source=m.fs.split6.to_pipe9,destination=m.fs.pipe9.inlet)
+
+m.fs.well7 = wellpad(**welltype1_config)
+m.fs.well7.HCPV.fix(0.5)
+
+m.fs.s22 = Arc(source=m.fs.pipe9.outlet,destination=m.fs.well7.inlet)
 
 #expand arcs
 pyo.TransformationFactory("network.expand_arcs").apply_to(m)
@@ -187,12 +260,11 @@ print(f'D.o.F before specifying inlet conds={idaes.core.util.model_statistics.de
 
 #actual inlet specifications
 m.fs.comp1.inlet.pressure[0].fix(100*100000)
-#m.fs.comp1.inlet.temperature[0].fix(298)
 m.fs.inlet_temp_constraint = pyo.Constraint(expr=m.fs.comp1.control_volume.properties_in[0].temperature==298)
 
 #pre initialization dof
 m.fs.comp1.outlet.pressure[0].fix(300*100000)
-m.fs.comp1.inlet.flow_mass[0].fix(0.1)
+m.fs.comp1.inlet.flow_mass[0].fix(1)
 
 #initialize
 
@@ -219,7 +291,7 @@ def function(unit):
         propagate_state(unit.inlet,unit.outlet)
 
 seq.run(m,function)
-print(f'pre-initialization done')
+print(f'initialization done')
 
 #undo pre-initialization dof
 m.fs.comp1.outlet.pressure[0].unfix()
@@ -234,20 +306,29 @@ m.fs.pipe1.deactivate_slack_variables()
 m.fs.pipe2.deactivate_slack_variables()
 m.fs.pipe3.deactivate_slack_variables()
 m.fs.pipe4.deactivate_slack_variables()
+m.fs.pipe5.deactivate_slack_variables()
+m.fs.pipe6.deactivate_slack_variables()
+m.fs.pipe7.deactivate_slack_variables()
+m.fs.pipe8.deactivate_slack_variables()
+m.fs.pipe9.deactivate_slack_variables()
 
 m.fs.well1.deactivate_slack_variables()
 m.fs.well2.deactivate_slack_variables()
 m.fs.well3.deactivate_slack_variables()
+m.fs.well4.deactivate_slack_variables()
+m.fs.well5.deactivate_slack_variables()
+m.fs.well6.deactivate_slack_variables()
+m.fs.well7.deactivate_slack_variables()
 
 m.fs.pipe1.diameter.unfix()
 m.fs.pipe2.diameter.unfix()
 m.fs.pipe3.diameter.unfix()
 m.fs.pipe4.diameter.unfix()
-
-#constraint total production rate
-m.fs.total_oil_prod_constraint = pyo.Constraint(
-    expr=200000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD
-)
+m.fs.pipe5.diameter.unfix()
+m.fs.pipe6.diameter.unfix()
+m.fs.pipe7.diameter.unfix()
+m.fs.pipe8.diameter.unfix()
+m.fs.pipe9.diameter.unfix()
 
 #new objective function
 m.fs.opex = pyo.Expression(
@@ -257,40 +338,48 @@ m.fs.raw_mats = pyo.Expression(
     expr=365*24*3600* 0.045*m.fs.pipe1.inlet.flow_mass[0]
 )
 m.fs.revenue = pyo.Expression(
-    expr=365*24*3600* 70*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD)
+    expr=365*24*3600* 70*(m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD)
 )
 m.fs.capex = pyo.Expression(
-    expr=m.fs.comp1.costing.capital_cost+m.fs.pipe1.costing.capital_cost+m.fs.pipe2.costing.capital_cost+m.fs.pipe3.costing.capital_cost+m.fs.pipe4.costing.capital_cost
+    expr= m.fs.comp1.costing.capital_cost+m.fs.pipe1.costing.capital_cost+m.fs.pipe2.costing.capital_cost+m.fs.pipe3.costing.capital_cost+m.fs.pipe4.costing.capital_cost+m.fs.pipe5.costing.capital_cost+m.fs.pipe6.costing.capital_cost+m.fs.pipe7.costing.capital_cost+m.fs.pipe8.costing.capital_cost+m.fs.pipe9.costing.capital_cost
 )
 m.fs.obj = pyo.Objective(
     expr=(0.1*m.fs.capex+m.fs.opex+m.fs.raw_mats-m.fs.revenue)/1000000
 )
 
-#test constraints
-#m.fs.pipe3.inlet.flow_mass[0].fix(0)
-#m.fs.pipe3.diameter.fix(0.0)
-#m.fs.total_oil_prod_constraint.deactivate()
+m.fs.prod_target = pyo.Param(mutable=True,initialize=100000)
+#constraint total production rate
+m.fs.total_oil_prod_constraint = pyo.Constraint(
+    expr=m.fs.prod_target/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD
+)
 
-from co2_eor.util_funcs import conopt,ipopt
+from co2_eor.util_funcs import ipopt, conopt, export_flowsheet_to_excel
+import numpy as np
+prod_targets = np.linspace(300000,1300000,10)
 
-import contextlib
-with open('temps/flowsheet_6_presolve_pprint.txt', 'w') as f:
-    with contextlib.redirect_stdout(f):
-        m.pprint()
+import sys
+import os
+from contextlib import contextmanager
 
-#scale model
-scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
-#solve flowsheet
-res=conopt.solve(scaled_m,tee=True,keepfiles=True)
-#unscale model
-pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
+# Define the suppressor
+@contextmanager
+def suppress_stdout():
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:  
+            yield
+        finally:
+            sys.stdout = old_stdout
 
-with open('temps/flowsheet_6_postsolve_display.txt', 'w') as f:
-    with contextlib.redirect_stdout(f):
-        m.display()
+for prod_target in prod_targets:
+    m.fs.prod_target=prod_target
+    scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
+    with suppress_stdout():
+        res=conopt.solve(scaled_m,tee=True)
+    pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
+    pyo.assert_optimal_termination(res)
+    print(f'target {prod_target} solved')
+    export_flowsheet_to_excel(m.fs, rf'temps/sweep_data/fs_5_{int(prod_target/1000)}.xlsx')
 
-pyo.assert_optimal_termination(res)
-
-from co2_eor.util_funcs import export_flowsheet_to_excel
-export_flowsheet_to_excel(m.fs, 'temps/flowsheet6data_localsolve.xlsx')
 

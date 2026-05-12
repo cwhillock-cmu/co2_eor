@@ -25,10 +25,7 @@ m.fs.wellpad = wellpad(
         use_correction_factor=True,
         SC_B=789,
         IR_base=0.001968,
-        use_wellbore_pipe_model=True,
         depth=1000,
-        wellbore_diameter=0.076,
-        wellbore_roughness=0.0475e-3,
         )
 
 #fix degrees of freedom
