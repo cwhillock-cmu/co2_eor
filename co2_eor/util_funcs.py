@@ -2,6 +2,42 @@
 import pyomo.environ as pyo
 import pandas as pd
 
+ipopt = pyo.SolverFactory('ipopt')
+ipopt.options['linear_solver']='ma97'
+ipopt.options['tol']=1E-8
+ipopt.options['acceptable_tol']=1E-6
+ipopt.options['halt_on_ampl_error']='yes'
+bonmin = pyo.SolverFactory('bonmin')
+bonmin.options['linear_solver']='ma97'
+bonmin.options['tol']=1E-8
+bonmin.options['acceptable_tol']=1E-6
+bonmin.options['halt_on_ampl_error']='yes'
+bonmin.options['bonmin.algorithm']='B-BB'
+snopt = pyo.SolverFactory('snopt')
+snopt.options['outlev']=2
+snopt.options['major_iterations_limit'] = 10000
+snopt.options['major_feasibility_tolerance']=1e-8
+minos = pyo.SolverFactory('minos')
+minos.options['outlev']=2
+conopt=pyo.SolverFactory('conopt')
+conopt.options['outlev']=2
+conopt.options['logfreq']=1
+conopt.options['hess']=0
+baron = pyo.SolverFactory('baron')
+LindoGlobal = pyo.SolverFactory('lindoglobal')
+LGO = pyo.SolverFactory('LGO')
+knitro = pyo.SolverFactory('knitro')
+knitro.options['convex']=0
+knitro.options['algorithm']=6
+knitro.options['gradopt']=3
+knitro.options['hessopt']=4
+knitro.options['hessian_no_f']=0
+knitro.options['honorbnds']=1
+knitro.options['eval_fcga']=0
+knitro.options['derivcheck']=0
+knitro.options['cg_precond']=0
+knitro.options['datacheck']=1
+
 def export_compressor_df(compressor):
     """
     gets the important variables from an IDAES compressor object and returns a dataframe
@@ -69,38 +105,30 @@ def export_flowsheet_to_excel(flowsheet, filename):
             pd.concat(comp_dfs).to_excel(writer, sheet_name="CompData", index=True)
         flowsheet_df.to_excel(writer, sheet_name="FlowsheetData", index=True)
 
-ipopt = pyo.SolverFactory('ipopt')
-ipopt.options['linear_solver']='ma97'
-ipopt.options['tol']=1E-8
-ipopt.options['acceptable_tol']=1E-6
-ipopt.options['halt_on_ampl_error']='yes'
-bonmin = pyo.SolverFactory('bonmin')
-bonmin.options['linear_solver']='ma97'
-bonmin.options['tol']=1E-8
-bonmin.options['acceptable_tol']=1E-6
-bonmin.options['halt_on_ampl_error']='yes'
-bonmin.options['bonmin.algorithm']='B-BB'
-snopt = pyo.SolverFactory('snopt')
-snopt.options['outlev']=2
-snopt.options['major_iterations_limit'] = 10000
-snopt.options['major_feasibility_tolerance']=1e-8
-minos = pyo.SolverFactory('minos')
-minos.options['outlev']=2
-conopt=pyo.SolverFactory('conopt')
-conopt.options['outlev']=2
-conopt.options['logfreq']=1
-conopt.options['hess']=0
-baron = pyo.SolverFactory('baron')
-LindoGlobal = pyo.SolverFactory('lindoglobal')
-LGO = pyo.SolverFactory('LGO')
-knitro = pyo.SolverFactory('knitro')
-knitro.options['convex']=0
-knitro.options['algorithm']=6
-knitro.options['gradopt']=3
-knitro.options['hessopt']=4
-knitro.options['hessian_no_f']=0
-knitro.options['honorbnds']=1
-knitro.options['eval_fcga']=0
-knitro.options['derivcheck']=0
-knitro.options['cg_precond']=0
-knitro.options['datacheck']=1
+from idaes.core.util.initialization import propagate_state
+from co2_eor.pipeline import pipeline
+from co2_eor.wellpad import wellpad
+def fs_initializer_function(unit):
+    print(f'initializing {unit.name}')
+    if isinstance(unit, pipeline):
+        try:
+            res = unit.initialize()
+            pyo.assert_optimal_termination(res)
+        except (ValueError, RuntimeError):
+            unit.deactivate_feasibility_problem()
+            print(f'solve failed, propagating state')
+            propagate_state(unit.inlet,unit.outlet)
+    elif isinstance(unit,wellpad):
+        try:
+            res = unit.initialize()
+            pyo.assert_optimal_termination(res)
+        except (ValueError, RuntimeError):
+            unit.deactivate_feasibility_problem()
+            print(f'solve failed, propagating state')
+            propagate_state(unit.inlet,unit.outlet)
+    else:
+        try:
+            unit.initialize()
+        except ValueError:
+            print(f'solve failed, propagating state')
+            propagate_state(unit.inlet,unit.outlet)

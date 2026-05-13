@@ -33,7 +33,7 @@ m.fs.pipe.roughness.fix(0.0475e-3)
 m.fs.pipe.inlet.pressure[0].fix(340*100000)
 m.fs.pipe.inlet.temperature[0].fix(273.15+50)
 #m.fs.pipe.control_volume.properties_in[0].velocity.fix(3)
-#m.fs.pipe.inlet.flow_mass[0].fix(3)
+m.fs.pipe.inlet.flow_mass[0].fix(3)
 
 #assert idaescore.util.model_statistics.degrees_of_freedom(m)==0
 

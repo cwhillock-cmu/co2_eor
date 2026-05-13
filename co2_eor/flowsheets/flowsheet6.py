@@ -1,6 +1,7 @@
 import pyomo.environ as pyo
 import idaes.core
 from pyomo.network import Arc
+from pyomo.environ import units
 
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
 import idaes.models.unit_models.pressure_changer as idaesPressureChanger
@@ -9,9 +10,9 @@ from idaes.core import MomentumBalanceType
 from co2_eor.splitter import EnergySplittingType
 from co2_eor.mixer import MomentumMixingType
 
-from idaes.models.costing.SSLW import SSLWCosting, SSLWCostingData
-from idaes.models.costing.SSLW import CompressorType, CompressorDriveType, CompressorMaterial
-from idaes.models.costing.SSLW import VesselMaterial
+from co2_eor.SSLW import SSLWCosting, SSLWCostingData
+from co2_eor.SSLW import CompressorType, CompressorDriveType, CompressorMaterial
+from co2_eor.SSLW import VesselMaterial
 
 from co2_eor import pipeline, wellpad, mixer,splitter
 from co2_eor.util_funcs import export_compressor_df
@@ -188,7 +189,8 @@ print(f'D.o.F before specifying inlet conds={idaes.core.util.model_statistics.de
 #actual inlet specifications
 m.fs.comp1.inlet.pressure[0].fix(100*100000)
 #m.fs.comp1.inlet.temperature[0].fix(298)
-m.fs.inlet_temp_constraint = pyo.Constraint(expr=m.fs.comp1.control_volume.properties_in[0].temperature==298)
+#m.fs.inlet_temp_constraint = pyo.Constraint(expr=m.fs.comp1.control_volume.properties_in[0].temperature==298)
+m.fs.comp1.inlet.enth_mass[0].fix(m.fs.props.htpx(T=298*units.K,p=100*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MASS))
 
 #pre initialization dof
 m.fs.comp1.outlet.pressure[0].fix(300*100000)
@@ -210,16 +212,10 @@ order = seq.calculation_order(G)
 for o in heauristic_tear_set:
     print(o.name)
 
-def function(unit):
-    try:
-        unit.initialize()
-    except ValueError:
-        unit.deactivate_feasibility_problem()
-        print(f'solve failed, propagating state')
-        propagate_state(unit.inlet,unit.outlet)
+from co2_eor.util_funcs import fs_initializer_function
 
-seq.run(m,function)
-print(f'pre-initialization done')
+seq.run(m,fs_initializer_function)
+print(f'initialization done')
 
 #undo pre-initialization dof
 m.fs.comp1.outlet.pressure[0].unfix()
@@ -281,7 +277,7 @@ with open('temps/flowsheet_6_presolve_pprint.txt', 'w') as f:
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=conopt.solve(scaled_m,tee=True,keepfiles=True)
+res=ipopt.solve(scaled_m,tee=True,keepfiles=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 

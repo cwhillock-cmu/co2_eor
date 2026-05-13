@@ -60,6 +60,10 @@ def make_pipeline_config_block(config):
         ConfigValue(default=600*100000,domain=float)
     )
     config.declare(
+        "allowable_stress",
+        ConfigValue(default=2000*100000,domain=float)
+    )
+    config.declare(
             "property_package_args",
             ConfigBlock(implicit=True)
             )
@@ -87,6 +91,7 @@ def add_params(unit,config):
     unit.g = pyo.Param(initialize=9.80665, units=units.m/units.s**2) #m/s^2
     unit.height_change = pyo.Param(initialize=config.height_change, units=units.m) #m
     unit.max_pressure = pyo.Param(initialize=config.max_pressure, units=units.Pa) #Pa
+    unit.allowable_stress = pyo.Param(initialize=config.allowable_stress, units=units.Pa) #Pa
 
 def add_variables(unit,config):
     #diameter variable
@@ -285,6 +290,8 @@ def add_equations(unit,config):
         expr=#average.pressure>=average.pressure_crit
         average.pressure_sat>=average.pressure_crit
     )
+    unit.average_supercritical.deactivate()
+    unit.average_pressure_max.deactivate()
     unit.inlet_pressure_min.deactivate()
     unit.outlet_pressure_min.deactivate()
     unit.average_pressure_min.deactivate()
@@ -310,6 +317,8 @@ def add_equations(unit,config):
     #auxiliary expressions
     unit.Pdrop = pyo.Expression(expr=inlet.pressure-outlet.pressure)
 
+    unit.thickness = pyo.Expression(expr=unit.max_pressure*unit.diameter/(2*(unit.allowable_stress-unit.max_pressure)))
+
 def guess_scales(unit):
     #create local variables
     inlet = unit.control_volume.properties_in[0]
@@ -321,6 +330,8 @@ def guess_scales(unit):
     set_scaling_factor(unit.length,1e-3)
     set_scaling_factor(unit.roughness,1e2)
     set_scaling_factor(unit.ambient_temperature,1e-2)
+    set_scaling_factor(unit.max_pressure,1e-7)
+    set_scaling_factor(unit.allowable_stress,1e-8)
     set_scaling_factor(inlet.flow_mass,1e-2)
     set_scaling_factor(outlet.flow_mass,1e-2)
     set_scaling_factor(average.flow_mass,1e-2)
@@ -426,6 +437,7 @@ class pipelineData(UnitModelBlockData):
         autoScaler.scale_variables_by_magnitude(self)
         #autoScaler.scale_constraints_by_jacobian_norm(self)
         print(f'{self.name} initialization complete')
+        return res
 
     def print_parameters(self):
         print(f'{self.name} parameters')
@@ -434,6 +446,8 @@ class pipelineData(UnitModelBlockData):
         print(f'heat transfer coefficient: {pyo.value(self.alpha)} W/m2*K')
         print(f'ambient temperature: {pyo.value(self.ambient_temperature)} K')
         print(f'height change: {pyo.value(self.height_change)} m')
+        print(f'max pressure:{pyo.value(self.max_pressure)/100000} bar')
+        print(f'allowable stress:{pyo.value(self.allowable_stress)/100000} bar')
         print()
 
     def print_variables(self):
@@ -480,19 +494,23 @@ class pipelineData(UnitModelBlockData):
                 "roughness (m)":pyo.value(self.roughness),
                 "alpha (W/m2/K)":pyo.value(self.alpha),
                 "ambient temperature (K)":pyo.value(self.ambient_temperature),
-                "height change":pyo.value(self.height_change),
+                "height change (m)":pyo.value(self.height_change),
+                "max pressure (bar)":pyo.value(self.max_pressure)/100000,
+                "allowable stress (bar)":pyo.value(self.allowable_stress)/100000,
+                "thickness (m)":pyo.value(self.thickness),
                 "flowrate (kg/s)":pyo.value(self.inlet.flow_mass[0]),
                 "inlet pressure (bar)":pyo.value(self.inlet.pressure[0])/100000,
                 "inlet temperature (K)":pyo.value(self.control_volume.properties_in[0].temperature),
-                "inlet velocity (m/s)":pyo.value(self.control_volume.properties_in[0].velocity),
-                "inlet density (kg/m3)":pyo.value(self.control_volume.properties_in[0].dens_mass),
                 "outlet pressure (bar)":pyo.value(self.outlet.pressure[0])/100000,
                 "outlet temperature (K)":pyo.value(self.control_volume.properties_out[0].temperature),
-                "outlet velocity (m/s)":pyo.value(self.control_volume.properties_out[0].velocity),
-                "outlet density (kg/m3)":pyo.value(self.control_volume.properties_out[0].dens_mass),
+                "pressure drop (bar)":pyo.value(self.Pdrop)/100000,
                 "average pressure (bar)":pyo.value(self.control_volume.properties_avg.pressure)/100000,
                 "average temperature (K)":pyo.value(self.control_volume.properties_avg.temperature),
+                "inlet velocity (m/s)":pyo.value(self.control_volume.properties_in[0].velocity),
+                "outlet velocity (m/s)":pyo.value(self.control_volume.properties_out[0].velocity),
                 "average velocity (m/s)":pyo.value(self.control_volume.properties_avg.velocity),
+                "inlet density (kg/m3)":pyo.value(self.control_volume.properties_in[0].dens_mass),
+                "outlet density (kg/m3)":pyo.value(self.control_volume.properties_out[0].dens_mass),
                 "average density (kg/m3)":pyo.value(self.control_volume.properties_avg.dens_mass),
                 "average viscosity Pa*s":pyo.value(self.control_volume.properties_avg.visc_d_phase["Liq"]),
                 "average q W/m2":pyo.value(self.control_volume.properties_avg.q),
@@ -502,7 +520,6 @@ class pipelineData(UnitModelBlockData):
                 "average Cp/Cv":pyo.value(self.control_volume.properties_avg.heat_capacity_ratio),
                 "average speed of sound (m/s)":pyo.value(self.control_volume.properties_avg.speed_sound_phase["Liq"]),
                 "average M":pyo.value(self.control_volume.properties_avg.M),
-                "pressure drop (bar)":pyo.value(self.Pdrop)/100000
                 }
 
         return pd.DataFrame(data,index=[self.name])

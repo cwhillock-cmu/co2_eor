@@ -347,8 +347,8 @@ class wellpadData(UnitModelBlockData):
         autoScaler=AutoScaler(overwrite=True)
         autoScaler.scale_variables_by_magnitude(self)
         #autoScaler.scale_constraints_by_jacobian_norm(self)
-
         print(f'{self.name} initialization complete')
+        return res
 
     def print_parameters(self):
         print(f'{self.name} parameters')
