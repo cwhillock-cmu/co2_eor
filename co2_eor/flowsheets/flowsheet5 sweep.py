@@ -266,7 +266,7 @@ m.fs.comp1.inlet.enth_mass[0].fix(m.fs.props.htpx(T=298*units.K,p=100*100000*uni
 
 #pre initialization dof
 m.fs.comp1.outlet.pressure[0].fix(300*100000)
-m.fs.comp1.inlet.flow_mass[0].fix(1)
+m.fs.comp1.inlet.flow_mass[0].fix(0.1)
 
 #initialize
 
