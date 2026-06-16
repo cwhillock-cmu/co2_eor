@@ -7,3 +7,4 @@ co2_eor/__pycache__/
 *.SUM
 temps/
 .vscode/
+extras/

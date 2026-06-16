@@ -15,6 +15,8 @@ Methods for setting up FPhx as the state variables in a generic property
 package
 
 Authors: Andrew Lee, Douglas Allan
+
+modified to mass basis for co2_eor package
 """
 
 # TODO: Missing docstrings

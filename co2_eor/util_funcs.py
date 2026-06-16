@@ -3,7 +3,7 @@ import pyomo.environ as pyo
 import pandas as pd
 
 ipopt = pyo.SolverFactory('ipopt')
-ipopt.options['linear_solver']='ma97'
+ipopt.options['linear_solver']='ma27'
 ipopt.options['tol']=1E-8
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['halt_on_ampl_error']='yes'

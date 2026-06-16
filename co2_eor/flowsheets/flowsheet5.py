@@ -266,7 +266,7 @@ m.fs.comp1.inlet.enth_mass[0].fix(m.fs.props.htpx(T=298*units.K,p=100*100000*uni
 
 #pre initialization dof
 m.fs.comp1.outlet.pressure[0].fix(300*100000)
-m.fs.comp1.inlet.flow_mass[0].fix(1)
+m.fs.comp1.inlet.flow_mass[0].fix(20)
 
 #initialize
 
@@ -333,7 +333,7 @@ m.fs.pipe9.diameter.unfix()
 
 #constraint total production rate
 m.fs.total_oil_prod_constraint = pyo.Constraint(
-    expr=1000000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD
+    expr=400000/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD
 )
 #m.fs.total_oil_prod_constraint.deactivate()
 
@@ -361,13 +361,13 @@ m.fs.capex = pyo.Expression(
 m.fs.obj = pyo.Objective(
     expr=(0.1*m.fs.capex+m.fs.opex+m.fs.raw_mats-m.fs.revenue)/1000000
 )
-
+m.fs.visualize("distribution network")
 from co2_eor.util_funcs import ipopt, conopt
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
-res=conopt.solve(scaled_m,tee=True)
+res=ipopt.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
@@ -380,4 +380,3 @@ pyo.assert_optimal_termination(res)
 
 from co2_eor.util_funcs import export_flowsheet_to_excel
 export_flowsheet_to_excel(m.fs, 'temps/flowsheet_5_solve.xlsx')
-

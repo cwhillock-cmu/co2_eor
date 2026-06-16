@@ -31,4 +31,4 @@ for p in plist:
     #print(f'pressure:{p:.2f},Cp: {pyo.value(m.fs.stateBlock1.cp_mol):.2f} Cp/Cv: {pyo.value(m.fs.stateBlock1.heat_capacity_ratio):.2f}')
     print(pyo.value(m.fs.stateBlock1.mw))
     print(pyo.value(m.fs.stateBlock1.enth_mol))
-    print(pyo.value(m.fs.stateBlock1.visc_d_phase["Liq"]))
+    print(pyo.value(m.fs.stateBlock1.visc_d_phase["Vap"]))

@@ -15,6 +15,8 @@ Methods for setting up FTPx as the state variables in a generic property
 package
 
 Authors: Andrew Lee, Douglas Allan
+
+#modified to mass basis for co2_eor package
 """
 
 # TODO: Missing docstrings
@@ -200,7 +202,7 @@ def define_state(b):
     # Add supporting constraints
     if b.config.defined_state is False:
         # applied at outlet only
-        b.sum_mass_frac_out = Constraint(
+        b.sum_mole_frac_out = Constraint(
             expr=1 == sum(b.mass_frac_comp[i] for i in b.component_list)
         )
     """
@@ -393,8 +395,8 @@ def define_state(b):
     def define_display_vars_mFTPx(b):
         """Define display vars."""
         return {
-            "Total Molar Flowrate": b.flow_mol,
-            "Total Mole Fraction": b.mole_frac_comp,
+            "Total Mass Flowrate": b.flow_mass,
+            "Total Mass Fraction": b.mass_frac_comp,
             "Temperature": b.temperature,
             "Pressure": b.pressure,
         }
@@ -763,7 +765,7 @@ def calculate_scaling_factors(b):
     #    calculate_electrolyte_scaling(b)
 
 
-class FTPxScaler(CustomScalerBase):
+class mFTPxScaler(CustomScalerBase):
     """
     Scaler for constraints associated with FTPx state variables
     """
@@ -858,8 +860,8 @@ class FTPxScaler(CustomScalerBase):
 do_not_initialize = ["sum_mass_frac_out"]
 
 
-class FTPx(object):
-    """Total flow, temperature, pressure, mole fraction state."""
+class mFTPx(object):
+    """Total flow, temperature, pressure, mass fraction state."""
 
     set_metadata = set_metadata
     define_state = define_state
@@ -867,7 +869,7 @@ class FTPx(object):
     do_not_initialize = do_not_initialize
     define_default_scaling_factors = define_default_scaling_factors
     calculate_scaling_factors = calculate_scaling_factors
-    default_scaler = FTPxScaler
+    default_scaler = mFTPxScaler
 
 
 def _set_mole_fractions_vle(
