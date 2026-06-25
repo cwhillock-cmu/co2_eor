@@ -106,29 +106,50 @@ def export_flowsheet_to_excel(flowsheet, filename):
         flowsheet_df.to_excel(writer, sheet_name="FlowsheetData", index=True)
 
 from idaes.core.util.initialization import propagate_state
-from co2_eor.pipeline import pipeline
-from co2_eor.wellpad import wellpad
 def fs_initializer_function(unit):
     print(f'initializing {unit.name}')
-    if isinstance(unit, pipeline):
-        try:
-            res = unit.initialize()
-            pyo.assert_optimal_termination(res)
-        except (ValueError, RuntimeError):
-            unit.deactivate_feasibility_problem()
-            print(f'solve failed, propagating state')
-            propagate_state(unit.inlet,unit.outlet)
-    elif isinstance(unit,wellpad):
-        try:
-            res = unit.initialize()
-            pyo.assert_optimal_termination(res)
-        except (ValueError, RuntimeError):
-            unit.deactivate_feasibility_problem()
-            print(f'solve failed, propagating state')
-            propagate_state(unit.inlet,unit.outlet)
-    else:
-        try:
-            unit.initialize()
-        except ValueError:
-            print(f'solve failed, propagating state')
-            propagate_state(unit.inlet,unit.outlet)
+    try:
+        unit.initialize()
+    except ValueError:
+        print(f'call unit.initialize() failed, propagating state')
+        propagate_state(unit.inlet,unit.outlet)
+ 
+#THIS FUNCTION IS AI-GENERATED 
+from IPython.display import display 
+def split_print_wide_df(df, max_cols=5, use_display=True):
+    """
+    Splits a wide pandas DataFrame into multiple narrower DataFrames 
+    and automatically prints or displays each one.
+    
+    Args:
+        df (pd.DataFrame): The input wide DataFrame.
+        max_cols (int): The maximum number of columns per narrower DataFrame chunk.
+        use_display (bool): If True, uses Jupyter's display() for rich HTML formatting. 
+                            If False, uses standard text print().
+    """
+    # Extract the list of all columns
+    cols = df.columns
+    total_cols = len(cols)
+    
+    # Iterate through the columns in chunks of size `max_cols`
+    for i in range(0, total_cols, max_cols):
+        # Select the chunk of columns for this iteration
+        chunk_cols = cols[i:i + max_cols]
+        narrow_df = df[chunk_cols]
+        
+        # Print a header for context
+        print(f"--- Columns {i+1} to {min(i+max_cols, total_cols)} ---")
+        
+        # Display or print the narrower DataFrame
+        if use_display:
+            try:
+                # 'display' is the standard way to render DataFrames in Jupyter
+                display(narrow_df)
+            except NameError:
+                # Fallback to standard print if display() isn't imported/available
+                print(narrow_df)
+        else:
+            print(narrow_df)
+            
+        # Add a little spacing between the output dataframes
+        print("\n")
