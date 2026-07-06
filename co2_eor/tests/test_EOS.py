@@ -3,7 +3,7 @@ import idaes.core as idaescore
 import pyomo.util as pyoutil
 import numpy as np
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
-from co2_eor.thermo_config import configuration
+from co2_eor.MPF.thermo_config import configuration
 
 m = pyo.ConcreteModel()
 m.fs = idaescore.FlowsheetBlock(dynamic=False)

@@ -6,7 +6,7 @@ import idaes.models.properties.general_helmholtz as idaesHelmholtz
 import contextlib
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
 from co2_eor.wellpattern_r3 import wellpattern
-from co2_eor.thermo_config import configuration
+from co2_eor.MPF.thermo_config import configuration
 from co2_eor.gas_pipe import gasPipe
 
 m = pyo.ConcreteModel()

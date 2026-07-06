@@ -5,7 +5,7 @@ from pyomo.network import Arc
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
 import contextlib
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
-from co2_eor.thermo_config import configuration
+from co2_eor.MPF.thermo_config import configuration
 from co2_eor.processing_facility import processingFacility
 from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
 

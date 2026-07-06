@@ -21,7 +21,7 @@ from co2_eor.util_funcs import export_compressor_df
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
 from co2_eor.liq_pipe import liqPipe
 from co2_eor.wellpattern_r3 import wellpattern
-from co2_eor.thermo_config import configuration
+from co2_eor.MPF.thermo_config import configuration
 from co2_eor.gas_pipe import gasPipe
 from co2_eor.processing_facility import processingFacility
 from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter

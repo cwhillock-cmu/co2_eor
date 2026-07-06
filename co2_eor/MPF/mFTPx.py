@@ -561,7 +561,7 @@ def state_initialization(b):
             # Pure liquid
             for j in b.component_list:
                 if (l_phase, j) in b.phase_component_set:
-                    b.mole_frac_phase_comp[l_phase, j].value = b.mole_frac_comp[j].value
+                    b.mole_frac_phase_comp[l_phase, j].value = value(b.mole_frac_comp[j])
                 if (v_phase, j) in b.phase_component_set:
                     b.mole_frac_phase_comp[v_phase, j].value = b._mole_frac_tbub[
                         pp_VLE, j
@@ -570,7 +570,7 @@ def state_initialization(b):
             # Pure Vapor
             for j in b.component_list:
                 if (v_phase, j) in b.phase_component_set:
-                    b.mole_frac_phase_comp[v_phase, j].value = b.mole_frac_comp[j].value
+                    b.mole_frac_phase_comp[v_phase, j].value = value(b.mole_frac_comp[j])
                 if (l_phase, j) in b.phase_component_set:
                     b.mole_frac_phase_comp[l_phase, j].value = b._mole_frac_tdew[
                         pp_VLE, j
