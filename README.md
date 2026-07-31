@@ -6,7 +6,7 @@ This project provides a Non-Linear Programming (NLP) model built using the [IDAE
 ## Project Structure
 * **`co2_eor/MPF/`**: Contains the configuration file for building the IDAES modular properties framework Peng-Robinson Cubic equation of state. The mass state definitions didn't really work so they are not used. 
 * **`co2_eor/flowsheets/`**: Contains the current main network assembly and optimization scripts. These scripts connect the individual unit models into full EOR distribution networks.
-* **`co2_eor/util_funcs.py`**: Utility functions for defining NLP solver configurations (IPOPT, CONOPT, BONMIN, etc.) and post-processing. Includes the `export_flowsheet_to_excel` function, which automatically detects most unit models in a flowsheet to generate a consolidated Excel report.
+* **`co2_eor/util_funcs`**: Contains functions for exporting unit model data into dataframes and compiling them. Also has default solver options, custom initialization function (currently deprecated), and custom function for printing wide dataframes (AI-generated).
 
 ## Custom Unit Models
 * **`co2_eor/gas_pipe/`**: Isothermal vapor flow pipe hydraulic model from 'Gas Pipeline Hydraulics' by Menon
@@ -18,7 +18,6 @@ This project provides a Non-Linear Programming (NLP) model built using the [IDAE
 * **`co2_eor/splitter_unit/`**: Standard IDAES splitter unit, added a momentum balance type.
 * **`co2_eor/heater_unit/`**: Standard IDAES heater unit, added a custom costing block that assumes heat duty will be negative.
 * **`co2_eor/SSLW/`**: Standard IDAES SSLW costing file. Added smooth log functions from IDAES math util funcs. Might try to make it so these are not needed.
-* **`co2_eor/util_funcs`**: Contains functions for exporting unit model data into dataframes and compiling them. Also has default solver options, custom initialization function (currently deprecated), and custom function for printing wide dataframes (AI-generated).
 
 *(Note: `deprecated` directories contain older or alternative approaches and properties.)*
 
