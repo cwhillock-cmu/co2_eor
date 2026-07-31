@@ -168,12 +168,9 @@ def define_state(b):
     def mass_frac_phase_comp(b,p,i):
         return b.mole_frac_phase_comp[p,i]*b.mw_comp[i]/sum(b.mole_frac_phase_comp[p,j]*b.mw_comp[j] for j in b.component_list)
 
-    def flow_mol_phase_comp_rule(b, p, j):
+    @b.Expression(b.phase_component_set)
+    def flow_mol_phase_comp(b,p,j):
         return b.flow_mol_phase[p] * b.mole_frac_phase_comp[p, j]
-
-    b.flow_mol_phase_comp = Expression(
-        b.phase_component_set, rule=flow_mol_phase_comp_rule
-    )
 
     @b.Expression(b.phase_component_set)
     def flow_mass_phase_comp(b,p,j):
@@ -192,16 +189,19 @@ def define_state(b):
     #    define_electrolyte_state(b)
 
     # Add supporting constraints
-    def rule_mole_frac_comp(b, j):
-        if len(b.component_list) > 1:
-            return b.flow_mol_comp[j] == b.mole_frac_comp[j] * sum(
-                b.flow_mol_comp[k] for k in b.component_list
-            )
-        else:
-            return b.mole_frac_comp[j] == 1.0
+    #def rule_mole_frac_comp(b, j):
+    #    if len(b.component_list) > 1:
+    #        return b.flow_mol_comp[j] == b.mole_frac_comp[j] * sum(
+    #            b.flow_mol_comp[k] for k in b.component_list
+    #        )
+    #    else:
+    #        return b.mole_frac_comp[j] == 1.0
+    #b.mole_frac_comp_eq = Constraint(b.component_list, rule=rule_mole_frac_comp)
 
-    b.mole_frac_comp_eq = Constraint(b.component_list, rule=rule_mole_frac_comp)
-
+    @b.Constraint(b.component_list)
+    def mole_frac_comp_eq(b,i):
+        return b.flow_mass_comp[i] == b.mass_frac_comp[i] * sum(b.mass_frac_comp[k] for k in b.component_list)
+    
     if len(b.phase_list) == 1:
 
         def rule_total_mass_balance(b):

@@ -40,7 +40,7 @@ def make_config_block(config):
             )
     config.declare(
         "allowable_stress",
-        ConfigValue(default=2000*100000,domain=float)
+        ConfigValue(default=1387*100000,domain=float)
     )
     config.declare(
         "property_package_args",
@@ -58,7 +58,7 @@ def make_control_volume(unit,name,config):
 
 #add parameters from config
 def add_params(unit,config):
-    unit.length = pyo.Param(initialize=config.length, units=units.m) #m
+    unit.length = pyo.Param(initialize=config.length,mutable=True, units=units.m) #m
     unit.R = pyo.Param(initialize=8.314462, units=units.m**3*units.Pa/units.K/units.mol) #m^3*Pa*K^{-1}*mol^{-1}
     unit.average_pressure_weight = pyo.Param(initialize=config.average_pressure_weight)    
     unit.g = pyo.Param(initialize=9.80665, units=units.m/units.s**2) #m/s^2
@@ -79,7 +79,7 @@ def add_equations(unit,config):
     epsilon = 1e-4
 
     #create a set of slack variables for feasibility problem
-    num_slacks=4
+    num_slacks=2
     unit.spos = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.sneg = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.spos.fix(0)
@@ -121,15 +121,15 @@ def add_equations(unit,config):
         
     #average pressure 6
     unit.constant_average_pressure = pyo.Constraint(expr=
-        average.pressure==inlet.pressure + unit.spos[1]-unit.sneg[1]
+        average.pressure==inlet.pressure 
         )
     unit.constant_average_pressure.deactivate()
     unit.linear_average_pressure = pyo.Constraint(expr=
-        average.pressure==unit.average_pressure_weight*inlet.pressure+(1-unit.average_pressure_weight)*outlet.pressure +unit.spos[1]-unit.sneg[1]
+        average.pressure==unit.average_pressure_weight*inlet.pressure+(1-unit.average_pressure_weight)*outlet.pressure
         )
     unit.linear_average_pressure.deactivate()
     unit.nonlinear_average_pressure = pyo.Constraint(expr=
-        average.pressure==2/3*(inlet.pressure+outlet.pressure-(inlet.pressure*outlet.pressure)/(inlet.pressure+outlet.pressure)) +unit.spos[1]-unit.sneg[1]
+        average.pressure==2/3*(inlet.pressure+outlet.pressure-(inlet.pressure*outlet.pressure)/(inlet.pressure+outlet.pressure))
         )
     unit.nonlinear_average_pressure.deactivate()
     if config.average_pressure_type == "nonlinear":
@@ -141,19 +141,17 @@ def add_equations(unit,config):
 
     #isothermal 7
     unit.isothermal = pyo.Constraint(expr=
-        inlet.temperature==outlet.temperature + unit.spos[2] - unit.sneg[2])
+        inlet.temperature==outlet.temperature )
 
     #average reynolds number
     average.Re = pyo.Expression(expr=
-        #average.dens_mass*average.velocity*unit.unit.diameter/average.visc_d_phase["Liq"]
-        #average.dens_mass*average.velocity*unit.unit.diameter/average.visc_d_phase["Liq"]
-        smooth_abs(average.dens_mass*average.velocity*unit.diameter/(15E-6),epsilon)
-        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
+        #smooth_abs(average.dens_mass*average.velocity*unit.diameter/(15E-6),epsilon)
+        smooth_abs(average.dens_mass*average.velocity*unit.diameter/(average.visc_d_phase['Vap']),epsilon)
         )
     
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
-        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re)**0.9)))**(2) +unit.spos[3]-unit.sneg[3]
+        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
         )
     
     #compressibility
@@ -169,7 +167,7 @@ def add_equations(unit,config):
         #average.flow_mass/1.96==
         #    13.3*(298/101325)*unit.diameter**2.5*((inlet.pressure**2-outlet.pressure**2)*average.inverse_f/(average.G*average.temperature*unit.length*average.Z)+epsilon)**0.5
         (average.flow_mass/1.96)**2==
-            (13.3*(298/101325))**2*unit.diameter**5*((inlet.pressure**2-outlet.pressure**2)*average.inverse_f/(average.G*average.temperature*unit.length*average.Z))
+            (13.3*(298/101325))**2*unit.diameter**5*((inlet.pressure**2-outlet.pressure**2)*average.inverse_f/(average.G*average.temperature*unit.length*average.Z)) + unit.spos[2] - unit.sneg[2]
         ) #might need to modify constants
     
     #auxiliary constraints
@@ -236,6 +234,11 @@ def guess_scales(unit):
     set_scaling_factor(unit.outlet_pressure_max,1e-7)
     set_scaling_factor(unit.average_pressure_max,1e-7)
 
+    set_scaling_factor(unit.spos[1],1e-1)
+    set_scaling_factor(unit.sneg[1],1e-1)
+    set_scaling_factor(unit.spos[2],1e-1)
+    set_scaling_factor(unit.sneg[2],1e-1)
+
 #define gas pipe class
 @declare_process_block_class("gasPipe")
 class gasPipeData(UnitModelBlockData):
@@ -285,8 +288,6 @@ class gasPipeData(UnitModelBlockData):
         if display_after: 
             self.display()
             self.print_all()
-        #deactivate feasibility problem
-        self.deactivate_feasibility_problem()
         if res.solver.termination_condition == pyo.TerminationCondition.optimal:
             #create autoscaler
             autoScaler=AutoScaler(overwrite=True)
@@ -296,6 +297,8 @@ class gasPipeData(UnitModelBlockData):
         else:
             print(f'{self.name} initialization solve failed, propagating state')
             propagate_state(self.inlet,self.outlet)
+        #deactivate feasibility problem
+        self.deactivate_feasibility_problem()        
         return res
     
     def export_df(self,t=0):
@@ -307,11 +310,11 @@ class gasPipeData(UnitModelBlockData):
             "allowable stress (bar)":pyo.value(self.allowable_stress)/100000,
             "thickness (m)":pyo.value(self.thickness),
             "total flowrate (kg/s)":pyo.value(self.control_volume.properties_in[t].flow_mass),
+            "total flowrate (mol/s)":pyo.value(self.control_volume.properties_in[t].flow_mol),
             "pressure drop (bar)":pyo.value(self.Pdrop)/100000,
         }
         for j in self.control_volume.properties_in[t].component_list:
-            data.update({f'flowrate {j} (kg/s)':pyo.value(self.control_volume.properties_in[t].flow_mass_comp[j])})
-            data.update({f'mass frac {j}':pyo.value(self.control_volume.properties_in[t].mass_frac_comp[j])})
+            data.update({f'flowrate {j} (mol/s)':pyo.value(self.control_volume.properties_in[t].flow_mol_comp[j])})
             data.update({f'mole frac {j}':pyo.value(self.control_volume.properties_in[t].mole_frac_comp[j])})
         for state,statename in zip([self.control_volume.properties_in[t],self.control_volume.properties_out[t],self.control_volume.properties_avg[t]],['inlet','outlet','average']):
             data.update({f'{statename} temperature (K)':pyo.value(state.temperature)})

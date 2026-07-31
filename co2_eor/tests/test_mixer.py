@@ -2,7 +2,7 @@ import pyomo.environ as pyo
 import idaes.core as idaescore
 import pyomo.util as pyoutil
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
-from co2_eor.mixer import MomentumMixingType
+from co2_eor.mixer_unit import MomentumMixingType
 from co2_eor import mixer
 
 #test block

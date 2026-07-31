@@ -59,6 +59,7 @@ liqPipe_config = {
         "heat_balance_type":'nonisothermal',
         "average_pressure_weight":0.5,
         "average_temperature_weight":0.0,
+        "allowable_stress":2000*100000,
         "height_change":0,
         }
 
@@ -98,7 +99,8 @@ heater_config = {
 
 gasPipe_config = {
     "property_package":m.fs.props2,
-    "average_pressure_type":'nonlinear'
+    "average_pressure_type":'nonlinear',
+    "allowable_stress":2000*100000,
 }
 
 compressor_costing_config={
@@ -173,9 +175,10 @@ m.fs.split1 = splitter(**splitter_config,outlet_list=['to_comp1','to_pipe2'])
 m.fs.comp1 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp1.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp1.efficiency_isentropic.fix(0.85)
+m.fs.comp1.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp1.inlet.pressure[0]>=80*100000)
 
 m.fs.well1 = wellpattern(**wellpattern_config)
-m.fs.well1.HCPV.fix(1.5)
+m.fs.well1.HCPV.fix(1.1)
 
 m.fs.pipe2 = liqPipe(**liqPipe_config,length=1600)
 m.fs.pipe2.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
@@ -186,9 +189,10 @@ m.fs.pipe2.max_pressure.fix(600*100000)
 m.fs.comp2 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp2.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp2.efficiency_isentropic.fix(0.85)
+m.fs.comp2.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp2.inlet.pressure[0]>=80*100000)
 
 m.fs.well2 = wellpattern(**wellpattern_config)
-m.fs.well2.HCPV.fix(1.25)
+m.fs.well2.HCPV.fix(1.0)
 
 m.fs.s_split0_pipe1 = Arc(source=m.fs.split0.to_pipe1,destination=m.fs.pipe1.inlet)
 m.fs.s_pipe1_split1 = Arc(source=m.fs.pipe1.outlet,destination=m.fs.split1.inlet)
@@ -216,9 +220,10 @@ m.fs.pipe4.max_pressure.fix(600*100000)
 m.fs.comp3 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp3.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp3.efficiency_isentropic.fix(0.85)
+m.fs.comp3.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp3.inlet.pressure[0]>=80*100000)
 
 m.fs.well3 = wellpattern(**wellpattern_config)
-m.fs.well3.HCPV.fix(1)
+m.fs.well3.HCPV.fix(0.8)
 
 m.fs.pipe5 = liqPipe(**liqPipe_config,length=2400)
 m.fs.pipe5.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
@@ -229,9 +234,10 @@ m.fs.pipe5.max_pressure.fix(600*100000)
 m.fs.comp4 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp4.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp4.efficiency_isentropic.fix(0.85)
+m.fs.comp4.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp4.inlet.pressure[0]>=80*100000)
 
 m.fs.well4 = wellpattern(**wellpattern_config)
-m.fs.well4.HCPV.fix(0.75)
+m.fs.well4.HCPV.fix(0.7)
 
 m.fs.s_split0_pipe3 = Arc(source=m.fs.split0.to_pipe3,destination=m.fs.pipe3.inlet)
 m.fs.s_pipe3_split2 = Arc(source=m.fs.pipe3.outlet,destination=m.fs.split2.inlet)
@@ -260,9 +266,10 @@ m.fs.pipe7.max_pressure.fix(600*100000)
 m.fs.comp5 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp5.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp5.efficiency_isentropic.fix(0.85)
+m.fs.comp5.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp5.inlet.pressure[0]>=80*100000)
 
 m.fs.well5 = wellpattern(**wellpattern_config)
-m.fs.well5.HCPV.fix(0.5)
+m.fs.well5.HCPV.fix(0.9)
 
 m.fs.pipe8 = liqPipe(**liqPipe_config,length=4000)
 m.fs.pipe8.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
@@ -273,9 +280,10 @@ m.fs.pipe8.max_pressure.fix(600*100000)
 m.fs.comp6 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp6.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp6.efficiency_isentropic.fix(0.85)
+m.fs.comp6.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp6.inlet.pressure[0]>=80*100000)
 
 m.fs.well6 = wellpattern(**wellpattern_config)
-m.fs.well6.HCPV.fix(0.25)
+m.fs.well6.HCPV.fix(0.6)
 
 m.fs.s_split0_pipe6 = Arc(source=m.fs.split0.to_pipe6,destination=m.fs.pipe6.inlet)
 m.fs.s_pipe6_split3 = Arc(source=m.fs.pipe6.outlet,destination=m.fs.split3.inlet)
@@ -399,7 +407,10 @@ m.fs.source_comp.inlet.flow_mol[0].fix(80)
 
 m.fs.recycle_comp.outlet.pressure[0].fix(200*100000)
 
-m.fs.purge_splitter.split_fraction[0,'purge'].fix(1-1e-14)
+for i in range(1,7):
+    getattr(m.fs, "comp"+str(i)).outlet.pressure[0].fix(650*100000)
+
+m.fs.purge_splitter.split_fraction[0,'purge'].fix(1e-14)
 
 with open('temps/bakken_network_preinitialization1_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
@@ -427,9 +438,9 @@ for o in order:
 
 tear_guesses = {
     "flow_mol":{
-        (0):0.001,
+        (0):600,
     },
-    "enth_mol":{0:m.fs.props1.htpx(T=400*units.K,p=200*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE)},
+    "enth_mol":{0:m.fs.props1.htpx(T=300*units.K,p=200*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE)},
     "pressure":{0:200*100000},
 }
 seq.set_guesses_for(m.fs.chiller.inlet,tear_guesses)
@@ -452,7 +463,7 @@ def fs_custom_SD_initializer(unit):
         m.temp_fs.well[None].activate_feasibility_problem()
         ipopt.options['nlp_scaling_method'] = 'user-scaling'
         try:
-            res=ipopt.solve(m.temp_fs,tee=True)
+            res=ipopt.solve(m.temp_fs,tee=False)
         except ValueError:
             with open('temps/temp_fs_pprint.txt', 'w') as f:
                 with contextlib.redirect_stdout(f):
@@ -475,14 +486,14 @@ print(f'initialization 1 done')
 m.fs.source_comp.inlet.flow_mol[0].unfix()
 m.fs.source_comp.outlet.pressure[0].unfix()
 m.fs.recycle_comp.outlet.pressure[0].unfix()
-m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
+#m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
 #for i in range(1,7):
 #    getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
 #for i in range(1,15):
 #    getattr(m.fs, "pipe"+str(i)).diameter.unfix()
 
 #create production target
-m.fs.prod_target = pyo.Param(mutable=True,initialize=100000) #STB/yr
+m.fs.prod_target = pyo.Param(mutable=True,initialize=570000) #STB/yr
 #production target constraint
 @m.fs.Constraint()
 def production_target_constraint(fs):
@@ -496,22 +507,22 @@ def production_target_constraint(fs):
 
 for i in range(1,15):
     getattr(m.fs, "pipe"+str(i)).activate_slack_variables()
-for i in range(1,7):
-    getattr(m.fs,"well"+str(i)).activate_slack_variables()
+#for i in range(1,7):
+#    getattr(m.fs,"well"+str(i)).activate_slack_variables()
 
 @m.fs.Objective()
 def flowsheet_feasibility_objective(fs):
     expr = 0
     for i in range(1,15):
         expr += getattr(fs, "pipe"+str(i)).feasibility_expression
-    for i in range(1,7):
-        expr += getattr(fs,"well"+str(i)).feasibility_expression
+    #for i in range(1,7):
+    #    expr += getattr(fs,"well"+str(i)).feasibility_expression
     return expr
 
 #unfix initialization 2 dof
-#m.fs.source_comp.inlet.flow_mol[0].unfix()
-#m.fs.source_comp.outlet.pressure[0].unfix()
-#m.fs.recycle_comp.outlet.pressure[0].unfix()
+m.fs.source_comp.inlet.flow_mol[0].unfix()
+m.fs.source_comp.outlet.pressure[0].unfix()
+m.fs.recycle_comp.outlet.pressure[0].unfix()
 
 with open('temps/bakken_network_preinitialization2_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
@@ -522,10 +533,10 @@ scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
 ipopt.options['acceptable_tol']=1E-4
 ipopt.options['tol']=1E-6
-ipopt.options['max_iter'] = 1500
-ipopt.options['linear_solver']='ma57'
+ipopt.options['max_iter'] = 3000
+ipopt.options['linear_solver']='ma97'
 try: 
-    #res=ipopt.solve(scaled_m,tee=True)
+    res=ipopt.solve(scaled_m,tee=False)
     pass
 except ValueError:
     pass
@@ -573,7 +584,7 @@ def SD_solve(unit):
         m.temp_fs.stream_expanded = pyo.Reference(getattr(m.fs,"s"+"_comp"+number+"_well"+number+"_expanded"))
         ipopt.options['nlp_scaling_method'] = 'user-scaling'
         try:
-            res=ipopt.solve(m.temp_fs,tee=True)
+            res=ipopt.solve(m.temp_fs,tee=False)
         except ValueError:
             with open('temps/temp_fs_pprint.txt', 'w') as f:
                 with contextlib.redirect_stdout(f):
@@ -590,7 +601,7 @@ def SD_solve(unit):
         if unit.name[:6] == 'fs.mix':
             ipopt.options['max_iter'] = 9
         try:
-            res=ipopt.solve(scaled_unit,tee=True)
+            res=ipopt.solve(scaled_unit,tee=False)
             pyo.assert_optimal_termination(res)
         except (ValueError, RuntimeError) as error:
             if unit.name[:6] != 'fs.mix':
@@ -621,7 +632,7 @@ m.fs.recycle_comp.outlet.pressure[0].unfix()
 m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
 for i in range(1,7):
     getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
-for i in range(1,15):
+for i in range(0,15):
     getattr(m.fs, "pipe"+str(i)).diameter.unfix()
 
 #create objective function terms
@@ -630,7 +641,7 @@ def opex(fs):
     expr = fs.source_comp.work_mechanical[0] + fs.recycle_comp.work_mechanical[0] - 0.2*fs.chiller.heat_duty[0]
     for i in range(1,7):
         expr += getattr(fs,"comp"+str(i)).work_mechanical[0]
-    return 365*24*3600* 4E-8*expr + fs.procFac.costing.opex
+    return 365*24*3600* 4E-8*expr + fs.procFac.costing.opex/3600/24/365
 
 m.fs.raw_mats = pyo.Expression(
     expr=365*24*3600* 0.050*m.fs.pipe0.control_volume.properties_in[0].flow_mass
@@ -641,21 +652,30 @@ def revenue(fs):
     expr = 0
     for i in range(1,7):
         expr += getattr(fs,"well"+str(i)).q_OIL_PROD
-    #return 365*24*3600* 70*expr
-    return 0
+    return 365*24*3600* 70*expr
 
 @m.fs.Expression()
 def capex(fs):
     expr = fs.source_comp.costing.capital_cost + fs.recycle_comp.costing.capital_cost + fs.procFac.costing.capital_cost
     for i in range(1,7):
         expr += getattr(fs,"comp"+str(i)).costing.capital_cost
-    for i in range(1,15):
+    for i in range(0,15):
         expr += getattr(fs,"pipe"+str(i)).costing.capital_cost
     return expr
 
-m.fs.obj = pyo.Objective(
+m.fs.obj_with_revenue = pyo.Objective(
     expr=(m.fs.capex*0.1+m.fs.opex+m.fs.raw_mats-m.fs.revenue)/10000
 )
+m.fs.obj_no_revenue = pyo.Objective(
+    expr=(m.fs.capex*0.1+m.fs.opex+m.fs.raw_mats)/10000
+)
+m.fs.obj_all_revenue = pyo.Objective(
+    expr=(-m.fs.revenue)/10000
+)
+m.fs.obj_with_revenue.deactivate()
+m.fs.obj_all_revenue.deactivate()
+m.fs.obj_no_revenue.activate()
+m.fs.production_target_constraint.activate()
 
 with open('temps/bakken_network_presolve_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
@@ -665,10 +685,15 @@ with open('temps/bakken_network_presolve_pprint.txt', 'w') as f:
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
 ipopt.options['max_iter'] = 4000
-ipopt.options['linear_solver']='ma97'
+ipopt.options['linear_solver']='ma27'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
-res=conopt.solve(scaled_m,tee=True)
+ipopt.options['nlp_scaling_method']='gradient-based'
+ipopt.options['expect_infeasible_problem']='yes'
+ipopt.options['OF_evaluate_orig_obj_at_resto_trial']='no'
+ipopt.options['OF_start_with_resto']='yes'
+#ipopt.options['OF_soft_resto_pderror_reduction_factor']=0
+res=ipopt.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
@@ -684,33 +709,78 @@ print(f'raw_mats = {pyo.value(m.fs.raw_mats)}')
 print(f'revenue = {pyo.value(m.fs.revenue)}')
 
 #visualize flowsheet
-m.fs.visualize("bakken_network")
+#m.fs.visualize("bakken_network")
 
 from co2_eor.util_funcs import export_flowsheet_to_excel
 export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve.xlsx')
 
 #pause program
+#"""
 import readchar
-
-prod_targets = np.linspace(100000,3000000,59)
-for prod_target in prod_targets:
-    m.fs.prod_target=prod_target
-    #seq.run(m,SD_solve)
-    scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
-    with open(rf'temps/bakken_sweep/bakken_{int(prod_target)}_solver_output.txt', 'w') as f:
-        with contextlib.redirect_stdout(f):
-            res = conopt.solve(scaled_m,tee=True)
-    if res.solver.termination_condition == pyo.TerminationCondition.optimal:
-        pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
-        with open(rf'temps/bakken_sweep/bakken_{int(prod_target)}_postsolve_display.txt', 'w') as f:
-            with contextlib.redirect_stdout(f):
-                m.display()
-        print(f'target {prod_target} solved')
-        export_flowsheet_to_excel(m.fs, rf'temps/bakken_sweep/bakken_{int(prod_target)}_export.xlsx')
-    else:
-        print(f'target {prod_target} failed')
-        
-
 print("Press any key to continue...")
 key = readchar.readkey() 
 print(f"Resumed after pressing: {key}")
+#"""
+
+m.fs.obj_with_revenue.deactivate()
+#m.fs.obj_no_revenue.activate()
+m.fs.obj_all_revenue.deactivate()
+m.fs.production_target_constraint.activate()
+
+from pyomo.common.errors import ApplicationError
+#prod_targets = np.linspace(1200000,100000,56)
+#prod_targets = np.flip(np.arange(50000,675000,25000))
+prod_targets = np.flip(np.arange(425000,605000,5000))
+ipopt.options['max_iter'] = 2500
+ipopt.options['linear_solver']='ma27'
+ipopt.options['acceptable_tol']=1E-6
+ipopt.options['tol']=1E-8
+ipopt.options['nlp_scaling_method']='gradient-based'
+ipopt.options['expect_infeasible_problem']='yes'
+ipopt.options['OF_evaluate_orig_obj_at_resto_trial']='no'
+ipopt.options['OF_start_with_resto']='yes'
+#ipopt.options['nlp_scaling_method']='none'
+conopt.options['iterlim']=500
+for prod_target in prod_targets:
+    run_conopt = False
+    m.fs.prod_target=prod_target
+    print(f'starting solve prod target = {prod_target}')
+    #"""
+    try:
+        scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
+        with open(rf'temps/bakken_sweep2/bakken_{int(prod_target)}_ipopt_output.txt', 'w') as f:
+            with contextlib.redirect_stdout(f):
+                res = ipopt.solve(scaled_m,tee=True)
+        if res.solver.termination_condition == pyo.TerminationCondition.optimal:
+            pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
+            with open(rf'temps/bakken_sweep2/bakken_{int(prod_target)}_postsolve_display.txt', 'w') as f:
+                with contextlib.redirect_stdout(f):
+                    m.display()
+            print(f'target {prod_target} solved')
+            export_flowsheet_to_excel(m.fs, rf'temps/bakken_sweep2/bakken_{int(prod_target)}_export.xlsx')
+            print('ipopt converged')
+        else:
+            run_conopt = True
+            print('ipopt not optimal')
+    except (ValueError, ApplicationError) as error:
+        print(f'ipopt failed with {error}')
+        run_conopt = True
+        pass
+    #"""
+    if run_conopt:
+        print('switching to conopt')
+        scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
+        with open(rf'temps/bakken_sweep2/bakken_{int(prod_target)}_conopt_output.txt', 'w') as f:
+            with contextlib.redirect_stdout(f):
+                res = conopt.solve(scaled_m,tee=True)
+        if res.solver.termination_condition == pyo.TerminationCondition.optimal:
+            pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
+            with open(rf'temps/bakken_sweep2/bakken_{int(prod_target)}_postsolve_display.txt', 'w') as f:
+                with contextlib.redirect_stdout(f):
+                    m.display()
+            print(f'target {prod_target} solved')
+            export_flowsheet_to_excel(m.fs, rf'temps/bakken_sweep2/bakken_{int(prod_target)}_export.xlsx')
+            print(f'conopt converged')
+        else:
+            print(f'target {prod_target} failed')
+        

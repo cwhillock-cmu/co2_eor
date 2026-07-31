@@ -4,17 +4,20 @@ import pyomo.environ as pyo
 import pandas as pd
 from pyomo.environ import units
 from pyomo.common.config import ConfigBlock, ConfigValue, In
+import idaes.core
 from idaes.core import (
     ControlVolume0DBlock,
     declare_process_block_class,
     UnitModelBlockData,
     useDefault,
+    MaterialFlowBasis,
 )
 from idaes.core.util.initialization import propagate_state
 from idaes.core.util.config import is_physical_parameter_block
 from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.math import smooth_abs, safe_log
+from co2_eor.util_funcs import add_state_material_balances
 
 #specify configuration options
 def make_liqPipe_config_block(config):
@@ -58,7 +61,7 @@ def make_liqPipe_config_block(config):
             )
     config.declare(
         "allowable_stress",
-        ConfigValue(default=2000*100000,domain=float)
+        ConfigValue(default=1387*100000,domain=float)
     )
     config.declare(
             "property_package_args",
@@ -75,11 +78,11 @@ def make_control_volume(unit,name,config):
     setattr(unit,name,control_volume)
     control_volume.add_state_blocks(has_phase_equilibrium=config.has_phase_equilibrium)
     #create average state block - if want to use time indexing this will need more thought
-    control_volume.properties_avg=config.property_package.build_state_block(defined_state=False,has_phase_equilibrium=config.has_phase_equilibrium)    
+    control_volume.properties_avg=config.property_package.build_state_block(unit.flowsheet().time,defined_state=False,has_phase_equilibrium=config.has_phase_equilibrium)    
 
 #adding parameters from config
 def add_params(unit,config):
-    unit.length = pyo.Param(initialize=config.length, units=units.m) #m
+    unit.length = pyo.Param(initialize=config.length,mutable=True, units=units.m) #m
     unit.R = pyo.Param(initialize=8.314462, units=units.m**3*units.Pa/units.K/units.mol) #m^3*Pa*K^{-1}*mol^{-1}
     unit.alpha = pyo.Param(initialize=config.alpha, units=units.W/units.m**2/units.K) #W/m^2K
     unit.ambient_temperature = pyo.Param(initialize=config.ambient_temperature, units=units.K) #K
@@ -96,17 +99,27 @@ def add_variables(unit,config):
     unit.max_pressure = pyo.Var(domain=pyo.NonNegativeReals,bounds=(1,2000*100000),initialize=600*100000, units=units.Pa) #Pa
 
     unit.area = pyo.Expression(expr=3.1415926*unit.diameter**2/4)
+
+    #set flowrate variable bounds
+    if unit.control_volume.properties_in[0].get_material_flow_basis() == MaterialFlowBasis.mass:
+        unit.control_volume.properties_in[0].flow_mass.lb = 0
+        unit.control_volume.properties_out[0].flow_mass.lb = 0
+        unit.control_volume.properties_avg[0].flow_mass.lb = 0
+    else:
+        unit.control_volume.properties_in[0].flow_mol.lb = 0
+        unit.control_volume.properties_out[0].flow_mol.lb = 0
+        unit.control_volume.properties_avg[0].flow_mol.lb = 0        
     
 #adding  constraints
 def add_equations(unit,config):
     #create local variables
     inlet = unit.control_volume.properties_in[0]
     outlet = unit.control_volume.properties_out[0]
-    average = unit.control_volume.properties_avg
+    average = unit.control_volume.properties_avg[0]
     epsilon = 1e-4
 
     #create a set of slack variables for feasibility problem
-    num_slacks=4
+    num_slacks=2
     unit.spos = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.sneg = pyo.Var(range(1,num_slacks+1),domain=pyo.NonNegativeReals,initialize=0)
     unit.spos.fix(0)
@@ -124,14 +137,11 @@ def add_equations(unit,config):
     #"easy" equality constraints/expressions
     
     #mass balance 1
-    unit.mass_bal = pyo.Constraint(expr=
-        inlet.flow_mass==outlet.flow_mass
-        )
-    
-    #average flow 2
-    unit.average_flow = pyo.Constraint(expr=
-        average.flow_mass*2==inlet.flow_mass+outlet.flow_mass
-        )
+    unit.control_volume.add_phase_component_balances(has_phase_equilibrium=config.has_phase_equilibrium)
+
+    #mass balance 2
+    #unit.add_state_material_balances(balance_type=idaes.core.MaterialBalanceType.componentPhase,state_1=unit.control_volume.properties_in,state_2=unit.control_volume.properties_avg)
+    add_state_material_balances(unit,balance_type=idaes.core.MaterialBalanceType.componentPhase,state_1=unit.control_volume.properties_in,state_2=unit.control_volume.properties_avg,name='mass_balance_2')
 
     #inlet velocity 3
     unit.inlet_velocity = pyo.Constraint(expr=
@@ -158,6 +168,7 @@ def add_equations(unit,config):
     unit.average_temperature = pyo.Constraint(expr=
         average.temperature==unit.average_temperature_weight*inlet.temperature+(1-unit.average_temperature_weight)*outlet.temperature
         )
+    set_scaling_factor(unit.average_temperature,1e-2)
 
     #inlet pressure density ratio
     inlet.PD_ratio = pyo.Expression(expr=
@@ -184,15 +195,15 @@ def add_equations(unit,config):
 
     #average pressure 6
     unit.constant_average_pressure = pyo.Constraint(expr=
-        average.pressure==inlet.pressure + unit.spos[1]-unit.sneg[1]
+        average.pressure==inlet.pressure 
         )
     unit.constant_average_pressure.deactivate()
     unit.linear_average_pressure = pyo.Constraint(expr=
-        average.pressure==unit.average_pressure_weight*inlet.pressure+(1-unit.average_pressure_weight)*outlet.pressure +unit.spos[1]-unit.sneg[1]
+        average.pressure==unit.average_pressure_weight*inlet.pressure+(1-unit.average_pressure_weight)*outlet.pressure
         )
     unit.linear_average_pressure.deactivate()
     unit.nonlinear_average_pressure = pyo.Constraint(expr=
-        average.pressure==2/3*(inlet.pressure+outlet.pressure-(inlet.pressure*outlet.pressure)/(inlet.pressure+outlet.pressure)) +unit.spos[1]-unit.sneg[1]
+        average.pressure==2/3*(inlet.pressure+outlet.pressure-(inlet.pressure*outlet.pressure)/(inlet.pressure+outlet.pressure))
         )
     unit.nonlinear_average_pressure.deactivate()
     if config.average_pressure_type == "nonlinear":
@@ -201,18 +212,22 @@ def add_equations(unit,config):
         unit.constant_average_pressure.activate()
     else:
         unit.linear_average_pressure.activate()
+    set_scaling_factor(unit.constant_average_pressure,1e-7)
+    set_scaling_factor(unit.linear_average_pressure,1e-7)
+    set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
 
     #average reynolds number
     average.Re = pyo.Expression(expr=
         #average.dens_mass*average.velocity*unit.unit.diameter/average.visc_d_phase["Liq"]
         #average.dens_mass*average.velocity*unit.unit.diameter/average.visc_d_phase["Liq"]
-        smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
-        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
+        #smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
+        average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
+        #smooth_abs(average.dens_mass*average.velocity*unit.diameter/9e-5,epsilon)
         )
 
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
-        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re)**0.9)))**(2) +unit.spos[2]-unit.sneg[2]
+        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
         )
     
     #hydraulic equation 7
@@ -222,27 +237,28 @@ def add_equations(unit,config):
                 average.pressure*average.dens_mass*average.velocity**2*pyo.log(inlet.pressure/outlet.pressure)-
                     (average.dens_mass*average.velocity)**2*(inlet.PD_ratio-outlet.PD_ratio)+
                         average.pressure*average.dens_mass*unit.g*unit.height_change+
-                            unit.spos[3]-unit.sneg[3]
+                            unit.spos[2]-unit.sneg[2]
         )
+    set_scaling_factor(unit.hydraulic,1e-6)
     
     #heat balance 8
     unit.isothermal_inlet = pyo.Constraint(expr=
-        inlet.temperature==outlet.temperature+(unit.spos[4]-unit.sneg[4])
+        inlet.temperature==outlet.temperature
         )
     unit.isothermal_inlet.deactivate()
     unit.nonisothermal = pyo.Constraint(expr=
         (outlet.enth_mass - inlet.enth_mass)*average.dens_mass*average.velocity==
-            4*average.q*unit.length/unit.diameter +(unit.spos[4]-unit.sneg[4])
+            4*average.q*unit.length/unit.diameter
         )
     unit.nonisothermal.deactivate()
     unit.isothermal_ambient = pyo.Constraint(expr=
-        outlet.temperature==unit.ambient_temperature +(unit.spos[4]-unit.sneg[4])
+        outlet.temperature==unit.ambient_temperature
         )
     unit.isothermal_ambient.deactivate()
     unit.no_JT = pyo.Constraint(expr=
         outlet.temperature==
             unit.ambient_temperature+
-                (inlet.temperature-unit.ambient_temperature)*pyo.exp(-4*unit.alpha*unit.length/(average.dens_mass*average.velocity*average.cp_mass*unit.diameter)) +(unit.spos[4]-unit.sneg[4])
+                (inlet.temperature-unit.ambient_temperature)*pyo.exp(-4*unit.alpha*unit.length/(average.dens_mass*average.velocity*average.cp_mass_phase['Liq']*unit.diameter))
         )
     unit.no_JT.deactivate()
     if config.heat_balance_type == "nonisothermal":
@@ -253,10 +269,15 @@ def add_equations(unit,config):
         unit.no_JT.activate()
     else:
         unit.isothermal_inlet.activate()
+    set_scaling_factor(unit.isothermal_inlet,1e-2)
+    set_scaling_factor(unit.nonisothermal,1e-2)
+    set_scaling_factor(unit.isothermal_ambient,1e-2)
+    set_scaling_factor(unit.no_JT,1e-2)
 
     #auxiliary constraints
 
     #single supercritical phase in pipe
+    #"""
     unit.outlet_supercritical = pyo.Constraint(
             expr=outlet.temperature_sat>=outlet.temperature_crit
             )
@@ -266,6 +287,11 @@ def add_equations(unit,config):
     unit.average_supercritical = pyo.Constraint(
             expr=average.temperature_sat>=average.temperature_crit
             )
+    unit.average_supercritical.deactivate()
+    set_scaling_factor(unit.inlet_supercritical,1e-2)
+    set_scaling_factor(unit.outlet_supercritical,1e-2)
+    set_scaling_factor(unit.average_supercritical,1e-2)
+    #"""
     unit.inlet_pressure_max = pyo.Constraint(
         expr=inlet.pressure<=unit.max_pressure
     )
@@ -275,23 +301,32 @@ def add_equations(unit,config):
     unit.average_pressure_max = pyo.Constraint(
         expr=average.pressure<=unit.max_pressure
     )
+    unit.average_pressure_max.deactivate()
+    set_scaling_factor(unit.inlet_pressure_max,1e-7)
+    set_scaling_factor(unit.outlet_pressure_max,1e-7)
+    set_scaling_factor(unit.average_pressure_max,1e-7)
+    #"""
     unit.inlet_pressure_min = pyo.Constraint(
         expr=#inlet.pressure>=inlet.pressure_crit
-        inlet.pressure_sat>=inlet.pressure_crit
+        #inlet.pressure_sat>=inlet.pressure_crit+1
+        inlet.pressure>=80*100000
     )
     unit.outlet_pressure_min = pyo.Constraint(
         expr=#outlet.pressure>=outlet.pressure_crit
-        outlet.pressure_sat>=outlet.pressure_crit
+        #outlet.pressure_sat>=outlet.pressure_crit+1
+        outlet.pressure>=80*100000
     )
     unit.average_pressure_min = pyo.Constraint(
         expr=#average.pressure>=average.pressure_crit
-        average.pressure_sat>=average.pressure_crit
+        average.pressure_sat>=average.pressure_crit+1
     )
-    unit.average_supercritical.deactivate()
-    unit.average_pressure_max.deactivate()
-    unit.inlet_pressure_min.deactivate()
-    unit.outlet_pressure_min.deactivate()
+    #unit.inlet_pressure_min.deactivate()
+    #unit.outlet_pressure_min.deactivate()
     unit.average_pressure_min.deactivate()
+    set_scaling_factor(unit.inlet_pressure_min,1e-7)
+    set_scaling_factor(unit.outlet_pressure_min,1e-7)
+    set_scaling_factor(unit.average_pressure_min,1e-7)
+    #"""
 
     #misc logic
     unit.misc_logic = pyo.ConstraintList()
@@ -302,14 +337,17 @@ def add_equations(unit,config):
     #unit.misc_logic.deactivate
 
     #mach number constraint
+    """
     average.M = pyo.Expression(expr=average.velocity/average.speed_sound_phase["Liq"])
     unit.mach_number_constraint = pyo.Constraint(
             expr=unit.length<=
-                unit.diameter*average.inverse_f/(4*average.heat_capacity_ratio)*
-                    ((1-average.M**2)/average.M**2+(1+average.heat_capacity_ratio)/2*
-                        safe_log(average.M**2)/(2/(average.heat_capacity_ratio+1)/(1+(average.heat_capacity_ratio-1)/2*average.M**2)))
+                unit.diameter*average.inverse_f/(4*average.heat_capacity_ratio_phase['Liq'])*
+                    ((1-average.M**2)/average.M**2+(1+average.heat_capacity_ratio_phase['Liq'])/2*
+                        safe_log(average.M**2)/(2/(average.heat_capacity_ratio_phase['Liq']+1)/(1+(average.heat_capacity_ratio_phase['Liq']-1)/2*average.M**2)))
             )
     unit.mach_number_constraint.deactivate()
+    set_scaling_factor(unit.mach_number_constraint,1e-3)
+    """
 
     #auxiliary expressions
     unit.Pdrop = pyo.Expression(expr=inlet.pressure-outlet.pressure)
@@ -319,7 +357,7 @@ def guess_scales(unit):
     #create local variables
     inlet = unit.control_volume.properties_in[0]
     outlet = unit.control_volume.properties_out[0]
-    average = unit.control_volume.properties_avg
+    average = unit.control_volume.properties_avg[0]
     
     #variable and parameter scaling factors
     set_scaling_factor(unit.diameter,1e2)
@@ -341,32 +379,23 @@ def guess_scales(unit):
     set_scaling_factor(outlet.temperature,1e-2)
     set_scaling_factor(average.temperature,1e-2)
     set_scaling_factor(average.mw,1e2)
-    set_scaling_factor(average.visc_d_phase["Liq"],1e6)
+    try:
+        set_scaling_factor(average.visc_d_phase["Liq"],1e6)
+    except KeyError:
+        print('skipping liquid viscosity scaling factor')
+    
+    set_scaling_factor(unit.spos[1],1e-1)
+    set_scaling_factor(unit.sneg[1],1e-1)
+    set_scaling_factor(unit.spos[2],1e-6)
+    set_scaling_factor(unit.sneg[2],1e-6)
 
     #equality constraint scaling factors
-    set_scaling_factor(unit.mass_bal,1e-2)
-    set_scaling_factor(unit.average_flow,1e-2)
-    set_scaling_factor(unit.average_temperature,1e-2)
-    set_scaling_factor(unit.constant_average_pressure,1e-7)
-    set_scaling_factor(unit.linear_average_pressure,1e-7)
-    set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
-    set_scaling_factor(unit.hydraulic,1e-10)
-    set_scaling_factor(unit.isothermal_inlet,1e-2)
-    set_scaling_factor(unit.nonisothermal,1e-2)
-    set_scaling_factor(unit.isothermal_ambient,1e-2)
-    set_scaling_factor(unit.no_JT,1e-2)
+    #set_scaling_factor(unit.mass_bal,1e-2)
+    #set_scaling_factor(unit.average_flow,1e-2)
     
     #auxiliary constraint scaling factors
-    set_scaling_factor(unit.inlet_supercritical,1e-2)
-    set_scaling_factor(unit.outlet_supercritical,1e-2)
-    set_scaling_factor(unit.average_supercritical,1e-2)
-    set_scaling_factor(unit.mach_number_constraint,1e-3)
-    set_scaling_factor(unit.inlet_pressure_max,1e-7)
-    set_scaling_factor(unit.outlet_pressure_max,1e-7)
-    set_scaling_factor(unit.average_pressure_max,1e-7)
-    set_scaling_factor(unit.inlet_pressure_min,1e-7)
-    set_scaling_factor(unit.outlet_pressure_min,1e-7)
-    set_scaling_factor(unit.average_pressure_min,1e-7)
+    
+
 
 #define pipe class
 @declare_process_block_class("liqPipe")
@@ -425,9 +454,6 @@ class liqPipeData(UnitModelBlockData):
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
         if display_after: 
             self.display()
-            self.print_all()
-        #deactivate feasibility problem
-        self.deactivate_feasibility_problem()
         if res.solver.termination_condition == pyo.TerminationCondition.optimal:
             #create autoscaler
             autoScaler=AutoScaler(overwrite=True)
@@ -437,55 +463,9 @@ class liqPipeData(UnitModelBlockData):
         else:
             print(f'{self.name} initialization solve failed, propagating state')
             propagate_state(self.inlet,self.outlet)
+        #deactivate feasibility problem
+        self.deactivate_feasibility_problem()
         return res
-
-    def print_parameters(self):
-        print(f'{self.name} parameters')
-        print(f'length: {pyo.value(self.length)} m')
-        print(f'roughness: {pyo.value(self.roughness)} m')
-        print(f'heat transfer coefficient: {pyo.value(self.alpha)} W/m2*K')
-        print(f'ambient temperature: {pyo.value(self.ambient_temperature)} K')
-        print(f'height change: {pyo.value(self.height_change)} m')
-        print(f'max pressure:{pyo.value(self.max_pressure)/100000} bar')
-        print(f'allowable stress:{pyo.value(self.allowable_stress)/100000} bar')
-        print()
-
-    def print_variables(self):
-        print(f'{self.name} variables')
-        print(f'diameter: {pyo.value(self.diameter)} m')
-        print(f'Flowrate: {pyo.value(self.inlet.flow_mass[0])} kg/s')
-        print(f'Inlet Pressure: {pyo.value(self.inlet.pressure[0])/100000} bar')
-        print(f'Inlet Temperature: {pyo.value(self.control_volume.properties_in[0].temperature)} K')
-        print(f'Inlet Velocity: {pyo.value(self.control_volume.properties_in[0].velocity)} m/s')
-        print(f'Outlet Pressure: {pyo.value(self.outlet.pressure[0])/100000} bar')
-        print(f'Outlet Temperature: {pyo.value(self.control_volume.properties_out[0].temperature)} K')
-        print(f'Outlet Velocity: {pyo.value(self.control_volume.properties_out[0].velocity)} m/s')
-        print(f'Average Pressure: {pyo.value(self.control_volume.properties_avg.pressure)/100000} bar')
-        print(f'Average Temperature: {pyo.value(self.control_volume.properties_avg.temperature)} K')
-        print(f'Average Viscosity: {pyo.value(self.control_volume.properties_avg.visc_d_phase["Liq"])} Pa*s')
-        print()
-
-    def print_expressions(self):
-        print(f'{self.name} expressions')
-        print(f'Average Velocity: {pyo.value(self.control_volume.properties_avg.velocity)} m/s')
-        print(f'Inlet PD ratio: {pyo.value(self.control_volume.properties_in[0].PD_ratio)} J')
-        print(f'Outlet PD ratio: {pyo.value(self.control_volume.properties_out[0].PD_ratio)} J')
-        print(f'Average PD ratio: {pyo.value(self.control_volume.properties_avg.PD_ratio)} J')
-        print(f'Average q: {pyo.value(self.control_volume.properties_avg.q)} W/m2')
-        print(f'Average Re: {pyo.value(self.control_volume.properties_avg.Re)}')
-        print(f'Average 1/f: {pyo.value(self.control_volume.properties_avg.inverse_f)} 1/J')
-        print(f'Average Cp: {pyo.value(self.control_volume.properties_avg.cp_mass)} J/kg')
-        print(f'Average Cp/Cv: {pyo.value(self.control_volume.properties_avg.heat_capacity_ratio)}')
-        print(f'Average speed of sound: {pyo.value(self.control_volume.properties_avg.speed_sound_phase["Liq"])} m/s')
-        print(f'Average M: {pyo.value(self.control_volume.properties_avg.M)}')
-        print(f'Pressure Drop: {pyo.value(self.Pdrop)/100000} bar')
-        print()
-
-    def print_all(self):
-        print()
-        self.print_parameters()
-        self.print_variables()
-        self.print_expressions()
 
     def export_df(self):
         data = {
@@ -498,28 +478,29 @@ class liqPipeData(UnitModelBlockData):
                 "max pressure (bar)":pyo.value(self.max_pressure)/100000,
                 "allowable stress (bar)":pyo.value(self.allowable_stress)/100000,
                 "thickness (m)":pyo.value(self.thickness),
-                "flowrate (kg/s)":pyo.value(self.inlet.flow_mass[0]),
+                "flowrate (kg/s)":pyo.value(self.control_volume.properties_in[0].flow_mass),
+                "flowrate (mol/s)":pyo.value(self.control_volume.properties_in[0].flow_mol),
                 "inlet pressure (bar)":pyo.value(self.inlet.pressure[0])/100000,
                 "inlet temperature (K)":pyo.value(self.control_volume.properties_in[0].temperature),
                 "outlet pressure (bar)":pyo.value(self.outlet.pressure[0])/100000,
                 "outlet temperature (K)":pyo.value(self.control_volume.properties_out[0].temperature),
                 "pressure drop (bar)":pyo.value(self.Pdrop)/100000,
-                "average pressure (bar)":pyo.value(self.control_volume.properties_avg.pressure)/100000,
-                "average temperature (K)":pyo.value(self.control_volume.properties_avg.temperature),
+                "average pressure (bar)":pyo.value(self.control_volume.properties_avg[0].pressure)/100000,
+                "average temperature (K)":pyo.value(self.control_volume.properties_avg[0].temperature),
                 "inlet velocity (m/s)":pyo.value(self.control_volume.properties_in[0].velocity),
                 "outlet velocity (m/s)":pyo.value(self.control_volume.properties_out[0].velocity),
-                "average velocity (m/s)":pyo.value(self.control_volume.properties_avg.velocity),
+                "average velocity (m/s)":pyo.value(self.control_volume.properties_avg[0].velocity),
                 "inlet density (kg/m3)":pyo.value(self.control_volume.properties_in[0].dens_mass),
                 "outlet density (kg/m3)":pyo.value(self.control_volume.properties_out[0].dens_mass),
-                "average density (kg/m3)":pyo.value(self.control_volume.properties_avg.dens_mass),
-                "average viscosity Pa*s":pyo.value(self.control_volume.properties_avg.visc_d_phase["Liq"]),
-                "average q W/m2":pyo.value(self.control_volume.properties_avg.q),
-                "average Re":pyo.value(self.control_volume.properties_avg.Re),
-                "average 1/f":pyo.value(self.control_volume.properties_avg.inverse_f),
-                "average Cp (J/kg)":pyo.value(self.control_volume.properties_avg.cp_mass),
-                "average Cp/Cv":pyo.value(self.control_volume.properties_avg.heat_capacity_ratio),
-                "average speed of sound (m/s)":pyo.value(self.control_volume.properties_avg.speed_sound_phase["Liq"]),
-                "average M":pyo.value(self.control_volume.properties_avg.M),
+                "average density (kg/m3)":pyo.value(self.control_volume.properties_avg[0].dens_mass),
+                "average viscosity Pa*s":pyo.value(self.control_volume.properties_avg[0].visc_d_phase["Liq"]),
+                "average q W/m2":pyo.value(self.control_volume.properties_avg[0].q),
+                "average Re":pyo.value(self.control_volume.properties_avg[0].Re),
+                "average 1/f":pyo.value(self.control_volume.properties_avg[0].inverse_f),
+                "average Cp (J/kg)":pyo.value(self.control_volume.properties_avg[0].cp_mass_phase['Liq']),
+                #"average Cp/Cv":pyo.value(self.control_volume.properties_avg[0].heat_capacity_ratio_phase['Liq']),
+                #"average speed of sound (m/s)":pyo.value(self.control_volume.properties_avg[0].speed_sound_phase["Liq"]),
+                #"average M":pyo.value(self.control_volume.properties_avg[0].M),
                 }
 
         return pd.DataFrame(data,index=[self.name])

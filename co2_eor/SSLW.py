@@ -29,6 +29,9 @@ CHANGES FOR co2_eor
 used safe_log in compressor and vessel costing calcs
 used a tolerance for the power function in costing platforms and ladders
 in horizontal vessel costing, changed thickness to a pyomo object similar to how diameter is defined
+added inflation multiplier
+manually changed heat exchanger pressure factor to reference "control volume" instead of "hot side" for shortcut chiller calculations
+swapped pressure factor calc to other equation for 3000 psig
 """
 # TODO: Missing docstrings
 # pylint: disable=missing-class-docstring
@@ -213,6 +216,9 @@ class BlowerMaterial(StrEnum):
     StainlessSteel = "StainlessSteel"
     NickelAlloy = "NickelAlloy"
 
+#inflation_multiplier = 1
+#inflation_multiplier = 1.2
+inflation_multiplier = 202/141 #PPI value for electrical machinery 2025/2018
 
 @declare_process_block_class("SSLWCosting")
 class SSLWCostingData(FlowsheetCostingBlockData):
@@ -349,8 +355,8 @@ class SSLWCostingData(FlowsheetCostingBlockData):
                 blk.base_cost_per_unit
                 == pyo.exp(
                     alpha[1]
-                    - alpha[2] * pyo.log(area_unit * blk.hx_oversize)
-                    + alpha[3] * pyo.log(area_unit * blk.hx_oversize) ** 2
+                    - alpha[2] * safe_log(area_unit * blk.hx_oversize)
+                    + alpha[3] * safe_log(area_unit * blk.hx_oversize) ** 2
                 )
                 * pyo.units.USD_CE500
             )
@@ -402,7 +408,8 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         )
 
         try:
-            tube_props = blk.unit_model.hot_side.properties_in[t0]
+            #tube_props = blk.unit_model.hot_side.properties_in[t0]
+            tube_props = blk.unit_model.control_volume.properties_in[t0]
         except AttributeError:
             # Assume HX1D
             if blk.unit_model.config.flow_type == HeatExchangerFlowPattern.cocurrent:
@@ -418,15 +425,15 @@ class SSLWCostingData(FlowsheetCostingBlockData):
 
         @blk.Constraint()
         def p_factor_eq(blk):
-            # Equation valid from 600 pisg to 3000 psig
-            # return self.pressure_factor == (
-            #     0.8510 + 0.1292*(pressure/600) + 0.0198*(pressure/600)**2)
-            # Equation valid from 100 pisg to 2000 psig
+            # Equation valid from 600 psig to 3000 psig
             return blk.pressure_factor == (
-                0.9803
-                + 0.0180 * (pressure / (100 * pyo.units.psi))
-                + 0.0017 * (pressure / (100 * pyo.units.psi)) ** 2
-            )
+                 0.8510 + 0.1292*(pressure/(600 * pyo.units.psi)) + 0.0198*(pressure/(600 * pyo.units.psi))**2)
+            # Equation valid from 100 pisg to 2000 psig
+            #return blk.pressure_factor == (
+            #    0.9803
+            #    + 0.0180 * (pressure / (100 * pyo.units.psi))
+            #    + 0.0017 * (pressure / (100 * pyo.units.psi)) ** 2
+            #)
 
         # Total capital cost equation
         @blk.Constraint()
@@ -436,6 +443,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
                 * blk.material_factor
                 * blk.length_factor
                 * blk.base_cost
+                * inflation_multiplier
             )
 
     def cost_vessel(
@@ -489,6 +497,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         blk.base_cost_per_unit = pyo.Var(
             initialize=1e5,
             domain=pyo.NonNegativeReals,
+            bounds=(0, None),
             units=pyo.units.USD_CE500,
             doc="Base cost per unit",
         )
@@ -598,6 +607,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         blk.weight = pyo.Var(
             initialize=1000,
             domain=pyo.NonNegativeReals,
+            bounds=(0,None),
             doc="Weight of vessel in lb",
             units=pyo.units.pound,
         )
@@ -633,8 +643,10 @@ class SSLWCostingData(FlowsheetCostingBlockData):
             return blk.base_cost_per_unit == (
                 pyo.exp(
                     alpha[1]
-                    + alpha[2] * (safe_log(blk.weight / pyo.units.pound))
-                    + alpha[3] * (safe_log(blk.weight / pyo.units.pound) ** 2)
+                    #+ alpha[2] * (safe_log(blk.weight / pyo.units.pound))
+                    #+ alpha[3] * (safe_log(blk.weight / pyo.units.pound) ** 2)
+                    + alpha[2] * (safe_log(blk.weight))
+                    + alpha[3] * (safe_log(blk.weight) ** 2)
                 )
                 * pyo.units.USD_CE500
             )
@@ -660,6 +672,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
             )
 
         # Total capital cost of vessel and ancillary equipment
+
         @blk.Constraint()
         def capital_cost_constraint(blk):
             cost_expr = blk.material_factor * blk.base_cost_per_unit
@@ -668,7 +681,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
             if number_of_trays is not None:
                 cost_expr += blk.base_cost_trays
 
-            return blk.capital_cost == cost_expr * number_of_units
+            return blk.capital_cost == cost_expr * number_of_units * inflation_multiplier
 
     def _cost_platforms_ladders(
         blk, vertical, aspect_ratio_range, vessel_diameter, vessel_length
@@ -1117,11 +1130,12 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         @blk.Expression(doc="Base cost for all units installed")
         def base_cost(blk):
             return blk.base_cost_per_unit * blk.number_of_units
-
+        
+        
         @blk.Constraint()
         def capital_cost_constraint(blk):
             return blk.capital_cost == (
-                blk.drive_factor * blk.material_factor * blk.base_cost
+                blk.drive_factor * blk.material_factor * blk.base_cost * inflation_multiplier
             )
 
     def cost_fan(

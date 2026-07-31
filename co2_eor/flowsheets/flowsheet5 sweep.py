@@ -7,8 +7,8 @@ import idaes.models.properties.general_helmholtz as idaesHelmholtz
 import idaes.models.unit_models.pressure_changer as idaesPressureChanger
 
 from idaes.core import MomentumBalanceType
-from co2_eor.splitter import EnergySplittingType
-from co2_eor.mixer import MomentumMixingType
+from co2_eor.splitter_unit import EnergySplittingType
+from co2_eor.mixer_unit import MomentumMixingType
 
 from co2_eor.SSLW import SSLWCosting, SSLWCostingData
 from co2_eor.SSLW import CompressorType, CompressorDriveType, CompressorMaterial

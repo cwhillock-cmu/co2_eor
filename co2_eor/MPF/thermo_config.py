@@ -1,9 +1,11 @@
 from pyomo.environ import units as units
+import copy
 
 #GENERAL
 from idaes.core import Component, PhaseType, LiquidPhase, VaporPhase
-from idaes.models.properties.modular_properties.state_definitions import FTPx
+from idaes.models.properties.modular_properties.state_definitions import FTPx, FcTP, FcPh
 from idaes.models.properties.modular_properties.eos.ceos import Cubic, CubicType
+from idaes.models.properties.modular_properties.eos.ideal import Ideal
 from idaes.models.properties.modular_properties.pure import NIST
 
 #VISCOSITY
@@ -19,9 +21,9 @@ from idaes.models.properties.modular_properties.phase_equil.forms import log_fug
 
 #CUSTOM
 from co2_eor.MPF import mFPhx
-from co2_eor.MPF import mFTPx, mFcTP
+from co2_eor.MPF import mFTPx, mFcTP, mFpcTP
 
-configuration = {
+configuration_vap = {
     "base_units":{
         "time":units.s,
         "length":units.m,
@@ -37,8 +39,7 @@ configuration = {
             "entr_mol_ig_comp":NIST,
             "cp_mol_ig_comp":NIST,
             "pressure_sat_comp":NIST,
-            "valid_phase_types":[PhaseType.liquidPhase,PhaseType.vaporPhase],
-            "phase_equilibrium_form": {("Vap", "Liq"): log_fugacity},
+            "valid_phase_types":[PhaseType.vaporPhase],
             "visc_d_phase_comp":{"Vap":ChungViscosityPure},
             #"viscosity_collision_integral_callback":collision_integral_neufeld_callback,
             "parameter_data":{
@@ -76,8 +77,7 @@ configuration = {
             "entr_mol_ig_comp":NIST,
             "cp_mol_ig_comp":NIST,
             "pressure_sat_comp":NIST,
-            "valid_phase_types":[PhaseType.liquidPhase,PhaseType.vaporPhase],
-            "phase_equilibrium_form": {("Vap", "Liq"): log_fugacity},
+            "valid_phase_types":[PhaseType.vaporPhase],
             "visc_d_phase_comp":{"Vap":ChungViscosityPure},
             #"viscosity_collision_integral_callback":collision_integral_neufeld_callback,
             "parameter_data":{
@@ -110,32 +110,28 @@ configuration = {
         },
     },
     "phases":{
-        "Liq":{
-            "type":LiquidPhase,
-            "equation_of_state":Cubic,
-            "equation_of_state_options":{"type":CubicType.PR},
-            "visc_d_phase": NoMethod,
-        },
         "Vap":{
             "type":VaporPhase,
+            #"equation_of_state":Ideal,
             "equation_of_state":Cubic,
             "equation_of_state_options":{"type":CubicType.PR},
             "visc_d_phase": ViscosityWilke,
             "transport_property_options": {"viscosity_phi_ij_callback": herring_zimmer_phi_ij_callback,}
         },
     },
-    "state_definition":mFcTP,
+    "state_definition":FcTP,
     "state_bounds":{
-        "flow_mass_comp":(-20000,1,20000,units.kg/units.s),
-        "temperature":(100,298,1500,units.K),
-        "pressure":(5e4,80*100000,2000*100000,units.Pa)
+        "flow_mol_comp":(-20000,1,20000,units.mol/units.s),
+        "temperature":(216,298,1500,units.K),
+        "pressure":(5e4,30*100000,2000*100000,units.Pa),
+    #    "enth_mol":(3000,10000,90000,units.J/units.mol),
     },
     "pressure_ref":(101325,units.Pa), #double check this
     "temperature_ref":(298.15,units.K), #double check this
     # Defining phase equilibria
-    "phases_in_equilibrium": [("Vap", "Liq")],
-    "phase_equilibrium_state": {("Vap", "Liq"): SmoothVLE},
-    "bubble_dew_method": LogBubbleDew,
+    #"phases_in_equilibrium": [("Vap", "Liq")],
+    #"phase_equilibrium_state": {("Vap", "Liq"): SmoothVLE},
+    #"bubble_dew_method": LogBubbleDew,
     "parameter_data":{ #https://doi.org/10.1021/ie301012q 
         "PR_kappa":{
             ("co2","co2"):0,
@@ -160,5 +156,65 @@ configuration = {
         "temperature":(216,298,1500,units.K),
         "pressure":(5e4,80*100000,2000*100000,units.Pa)
     },
+
+    "state_definition":FcTP,
+    "state_bounds":{
+        "flow_mol_comp":(-20000,1,20000,units.mol/units.s),
+        "temperature":(216,298,1500,units.K),
+        "pressure":(5e4,80*100000,2000*100000,units.Pa)
+    },
+
+    "state_definition":mFcTP,
+    "state_bounds":{
+        "flow_mass_comp":(-20000,100,20000,units.kg/units.s),
+        "temperature":(100,298,1500,units.K),
+        "pressure":(5e4,80*100000,2000*100000,units.Pa)
+    },
+
+    "state_definition":mFpcTP,
+    "state_bounds":{
+        "flow_mass_phase_comp":(-20000,100,20000,units.kg/units.s),
+        "temperature":(100,298,1500,units.K),
+        "pressure":(5e4,80*100000,2000*100000,units.Pa)
+    },
 """
 
+configuration_liq = copy.deepcopy(configuration_vap)
+configuration_liq['components']['co2']['valid_phase_types'] = [PhaseType.liquidPhase]
+configuration_liq['components']['co2']['visc_d_phase_comp'] = {'Liq':None}
+configuration_liq['components']['ch4']['valid_phase_types'] = [PhaseType.liquidPhase]
+configuration_liq['components']['ch4']['visc_d_phase_comp'] = {'Liq':None}
+configuration_liq['phases'] = {
+    'Liq': {
+        "type":LiquidPhase,
+        "equation_of_state":Cubic,
+        "equation_of_state_options":{"type":CubicType.PR},
+        "visc_d_phase": NoMethod,
+    }
+}
+
+configuration_VLE = copy.deepcopy(configuration_vap)
+configuration_VLE['components']['co2']['valid_phase_types'] = [PhaseType.liquidPhase,PhaseType.vaporPhase]
+configuration_VLE['components']['co2']['visc_d_phase_comp'] = {'Liq':None,'Vap':ChungViscosityPure}
+configuration_VLE['components']['co2']['phase_equilibrium_form'] = {("Vap", "Liq"): log_fugacity}
+configuration_VLE['components']['ch4']['valid_phase_types'] = [PhaseType.liquidPhase,PhaseType.vaporPhase]
+configuration_VLE['components']['ch4']['visc_d_phase_comp'] = {'Liq':None,'Vap':ChungViscosityPure}
+configuration_VLE['components']['ch4']['phase_equilibrium_form'] = {("Vap", "Liq"): log_fugacity}
+configuration_VLE['phases'] = {
+    'Liq': {
+        "type":LiquidPhase,
+        "equation_of_state":Cubic,
+        "equation_of_state_options":{"type":CubicType.PR},
+        "visc_d_phase": NoMethod,
+    },
+    'Vap': {
+        "type":VaporPhase,
+        "equation_of_state":Cubic,
+        "equation_of_state_options":{"type":CubicType.PR},
+        "visc_d_phase": ViscosityWilke,
+        "transport_property_options": {"viscosity_phi_ij_callback": herring_zimmer_phi_ij_callback},
+    }
+}
+configuration_VLE['phases_in_equilibrium'] = [("Vap", "Liq")]
+configuration_VLE['phase_equilibrium_state'] = {("Vap", "Liq"): SmoothVLE}
+configuration_VLE['bubble_dew_method'] = LogBubbleDew

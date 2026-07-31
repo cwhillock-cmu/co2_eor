@@ -20,6 +20,7 @@ Changes:
         All outlet pressures less than or equal to inlet pressure
     2. added custom enthalpy split
     3. added custom equal molar enthalpy
+    
 """
 
 from enum import Enum
@@ -1464,6 +1465,7 @@ objects linked the mixed state and all outlet states,
         if self.config.momentum_balance_type is MomentumBalanceType.none:
         
         #dont feel like messing with the momentum balance types so change None to add an inequality constraint
+        #also add pressure minimum
           
             @self.Constraint(
                     self.flowsheet().time,

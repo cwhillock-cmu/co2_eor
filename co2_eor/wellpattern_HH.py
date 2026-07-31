@@ -269,7 +269,7 @@ def add_equations(unit,name,config):
     unit.min_BHP_constraint = pyo.Constraint(
             expr=injection_state.pressure>=reservoir_state.pressure
             )
-    unit.min_BHP_constraint.deactivate()
+    #unit.min_BHP_constraint.deactivate()
 
 def guess_scales(unit,name,config):
     inlet=unit.control_volume.properties_in[0]
@@ -323,6 +323,9 @@ def guess_scales(unit,name,config):
     set_scaling_factor(unit.min_BHP_constraint,1e-7)
     set_scaling_factor(unit.max_BHP_constraint,1e-7)
 
+    set_scaling_factor(unit.spos[2],1e-7)
+    set_scaling_factor(unit.sneg[2],1e-7)
+
 #define wellpad class
 @declare_process_block_class("wellpattern")
 class wellpatternData(UnitModelBlockData):
@@ -356,7 +359,6 @@ class wellpatternData(UnitModelBlockData):
 
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'initializing {self.name}')
-
         #activate feasibility problem
         self.activate_feasibility_problem()
         #scale model
@@ -375,7 +377,7 @@ class wellpatternData(UnitModelBlockData):
             #create autoscaler
             autoScaler=AutoScaler(overwrite=True)
             autoScaler.scale_variables_by_magnitude(self)
-            #autoScaler.scale_constraints_by_jacobian_norm(self)
+            autoScaler.scale_constraints_by_jacobian_norm(self)
             print(f'{self.name} initialization solve successful')
         else:
             print(f'{self.name} initialization solve failed, propagating state')
@@ -384,8 +386,13 @@ class wellpatternData(UnitModelBlockData):
             self.control_volume.properties_out[0].temperature.value = pyo.value(self.outlet_temperature)
             self.control_volume.properties_out[0].enth_mass.value = pyo.value(self.control_volume.properties_in[0].enth_mass)
             self.outlet.pressure[0].value = pyo.value(self.outlet_pressure)
-            self.outlet.flow_mass[0].value = pyo.value(self.inlet.flow_mass[0])
-            self.outlet.mass_frac_comp[0,'co2'].value = 1
+            for j in self.control_volume.properties_out.component_list:
+                if j == 'co2':
+                    self.outlet.flow_mol_comp[0,j].value = pyo.value(self.control_volume.properties_in[0].flow_mol)
+                    self.control_volume.properties_out[0].mole_frac_comp[j].value = 1
+                else:
+                    self.control_volume.properties_out[0].flow_mol_comp[j].value = 0
+                    self.control_volume.properties_out[0].mole_frac_comp[j].value = 1e-14
         return res
 
     def export_df(self):
@@ -402,9 +409,11 @@ class wellpatternData(UnitModelBlockData):
                 "max BHP (bar)":pyo.value(self.BHP_max)/100000,
                 "multiplier":pyo.value(self.multiplier),
                 "HCPV":pyo.value(self.HCPV),
-                "total CO2 injection rate (kg/s)":pyo.value(self.inlet.flow_mass[0]),
-                "unit CO2 injection rate (kg/s)":pyo.value(self.control_volume.injection_state[0].flow_mass),
-                "unit CO2 injection rate (Rb/s)":pyo.value(self.control_volume.injection_state[0].flow_vol*6.29),
+                "total injection rate (kg/s)":pyo.value(self.control_volume.properties_in[0].flow_mass),
+                "unit injection rate (kg/s)":pyo.value(self.control_volume.injection_state[0].flow_mass),
+                "total injection rate (mol/s)":pyo.value(self.control_volume.properties_in[0].flow_mol),
+                "unit injection rate (mol/s)":pyo.value(self.control_volume.injection_state[0].flow_mol),
+                "unit injection rate (Rb/s)":pyo.value(self.control_volume.injection_state[0].flow_vol*6.29),
                 "inlet pressure (bar)":pyo.value(self.inlet.pressure[0])/100000,
                 "inlet temperature (K)":pyo.value(self.control_volume.properties_in[0].temperature),
                 "injection pressure (bar)":pyo.value(self.control_volume.injection_state[0].pressure)/100000,
@@ -416,6 +425,8 @@ class wellpatternData(UnitModelBlockData):
                 "CO2 breakthrough rate (RB/s)":pyo.value(self.q_CO2_BRKTH),
                 "total CO2 out (kg/s)":pyo.value(self.control_volume.properties_out[0].flow_mass_comp['co2']),
                 "total ch4 out (kg/s)":pyo.value(self.control_volume.properties_out[0].flow_mass_comp['ch4']),
+                "total CO2 out (mol/s)":pyo.value(self.control_volume.properties_out[0].flow_mol_comp['co2']),
+                "total ch4 out (mol/s)":pyo.value(self.control_volume.properties_out[0].flow_mol_comp['ch4']),
                 }
 
         return pd.DataFrame(data,index=[self.name])

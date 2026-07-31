@@ -37,7 +37,7 @@ def make_config_block(config):
     )
     config.declare(
         "conversion_type",
-        ConfigValue(default='convert_all',domain=In(['convert_all','convert_co2']))
+        ConfigValue(default='convert_all_mol',domain=In(['convert_all_mass','convert_co2','convert_all_mol']))
     )
 
 def make_control_volume(unit,name,config):
@@ -61,13 +61,17 @@ def add_equations(unit,config):
         )
     
     #convert mass
-    if config.conversion_type == 'convert_all':
+    if config.conversion_type == 'convert_all_mass':
         unit.mass_constraint = pyo.Constraint(expr=
             inlet.flow_mass == outlet.flow_mass
             )
     elif config.conversion_type == 'convert_co2':
         unit.mass_constraint = pyo.Constraint(expr=
             inlet.flow_mass_comp['co2'] == outlet.flow_mass
+            )
+    elif config.conversion_type == 'convert_all_mol':
+        unit.mass_constraint = pyo.Constraint(expr=
+            inlet.flow_mol == outlet.flow_mol
             )
     else:
         raise ValueError("invalid conversion type")
@@ -127,3 +131,17 @@ class mpf_helmholtz_converterData(UnitModelBlockData):
             propagate_state(self.inlet,self.outlet)
         print(f'{self.name} initialization complete')
         return res
+    
+    def export_df(self,t=0):
+        data = {
+            "conversion_type":self.config.conversion_type,
+        }
+        for state,statename in zip([self.control_volume.properties_in[t],self.control_volume.properties_out[t]],['inlet','outlet']):
+            data.update({f'{statename} total flowrate (kg/s)':pyo.value(state.flow_mass)})
+            for j in state.component_list:
+                data.update({f'{statename} flowrate {j} (mol/s)':pyo.value(state.flow_mol_comp[j])})
+                data.update({f'{statename} mole frac {j}':pyo.value(state.mole_frac_comp[j])})
+            data.update({f'{statename} temperature (K)':pyo.value(state.temperature)})
+            data.update({f'{statename} pressure (bar)':pyo.value(state.pressure)/100000})
+
+        return pd.DataFrame(data,index=[self.name])

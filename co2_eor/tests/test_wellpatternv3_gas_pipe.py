@@ -1,21 +1,32 @@
 import pyomo.environ as pyo
+from pyomo.environ import units as units
 import idaes
 import pyomo.util as pyoutil
 from pyomo.network import Arc
 import idaes.models.properties.general_helmholtz as idaesHelmholtz
 import contextlib
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
-from co2_eor.wellpattern_r3 import wellpattern
-from co2_eor.MPF.thermo_config import configuration
+from co2_eor.wellpattern_HH import wellpattern
+from co2_eor.MPF.thermo_config import configuration_vap
 from co2_eor.gas_pipe import gasPipe
 
 m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)
 m.fs.props1 = idaesHelmholtz.HelmholtzParameterBlock(
-        pure_component="CO2",amount_basis=idaesHelmholtz.AmountBasis.MASS,
-        state_vars=idaesHelmholtz.StateVars.TPX,phase_presentation=idaesHelmholtz.PhaseType.L
+        pure_component="CO2",amount_basis=idaesHelmholtz.AmountBasis.MOLE,
+        state_vars=idaesHelmholtz.StateVars.PH,phase_presentation=idaesHelmholtz.PhaseType.MIX
         )
-m.fs.props2 = GenericParameterBlock(**configuration)
+m.fs.props2 = GenericParameterBlock(**configuration_vap)
+
+import idaes.models.unit_models.pressure_changer as idaesPressureChanger
+
+m.fs.comp = idaesPressureChanger.PressureChanger(
+    property_package= m.fs.props1,
+    dynamic=False,
+    compressor=True,
+    thermodynamic_assumption=idaesPressureChanger.ThermodynamicAssumption.isentropic,
+)
+m.fs.comp.efficiency_isentropic.fix(0.85)
 
 m.fs.wellpattern = wellpattern(
         primary_property_package=m.fs.props1,
@@ -44,8 +55,10 @@ m.fs.pipe = gasPipe(
 )
 m.fs.pipe.diameter.fix(0.5)
 m.fs.pipe.roughness.fix(0.0475e-3)
+m.fs.pipe.max_pressure.fix(600*100000)
 
-m.fs.s1 = Arc(source=m.fs.wellpattern.outlet,destination=m.fs.pipe.inlet)
+m.fs.s1 = Arc(source=m.fs.comp.outlet,destination=m.fs.wellpattern.inlet)
+m.fs.s2 = Arc(source=m.fs.wellpattern.outlet,destination=m.fs.pipe.inlet)
 
 pyo.TransformationFactory("network.expand_arcs").apply_to(m)
 
@@ -53,12 +66,16 @@ with open('temps/test_wellpatternv3_gas_pipe_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.pprint()
 
-m.fs.wellpattern.inlet.temperature.fix(300)
-m.fs.wellpattern.inlet.pressure.fix(100*100000)
+m.fs.comp.inlet.enth_mol[0].fix(m.fs.props1.htpx(T=300*units.K,p=100*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE))
+m.fs.comp.inlet.pressure[0].fix(100*100000)
+#m.fs.comp.outlet.pressure[0].fix(138*100000)
 m.fs.wellpattern.HCPV.fix(0.5)
 
 print(f'D.o.F ={idaes.core.util.model_statistics.degrees_of_freedom(m)}')
 
+m.fs.test_obj = pyo.Objective(expr=m.fs.comp.outlet.pressure[0])
+
+m.fs.comp.initialize()
 m.fs.wellpattern.initialize()
 m.fs.pipe.initialize()
 from co2_eor.util_funcs import ipopt
@@ -73,6 +90,7 @@ with open('temps/test_wellpatternv3_gas_pipe_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
 
-from co2_eor.util_funcs import split_print_wide_df
-split_print_wide_df(m.fs.wellpattern.export_df())
-split_print_wide_df(m.fs.pipe.export_df())
+from co2_eor.util_funcs import split_print_wide_df, export_compressor_df
+split_print_wide_df(export_compressor_df(m.fs.comp),max_cols=4)
+split_print_wide_df(m.fs.wellpattern.export_df(),max_cols=4)
+split_print_wide_df(m.fs.pipe.export_df(),max_cols=4)
