@@ -4,16 +4,26 @@
 This project provides a Non-Linear Programming (NLP) model built using the [IDAES](https://idaes-pse.readthedocs.io/) framework and Pyomo for optimizing CO2 Enhanced Oil Recovery (EOR) systems.
 
 ## Project Structure
-* **`co2_eor/pipeline.py`**: Defines the `pipeline` unit model. It calculates pressure drop, heat transfer, and flow properties of CO2 through pipes using customized formulations (e.g., isothermal or non-isothermal heat balances).
-* **`co2_eor/wellpad.py`**: Defines the `wellpad` unit model. It links CO2 injection rates to reservoir dynamics, tracking Hydrocarbon Pore Volume (HCPV), oil/gas production rates, and CO2 breakthrough using empirical curve fits and Darcy's law.
-* **`co2_eor/mixer.py` & `co2_eor/splitter.py`**: Custom modified IDAES mixer and separator blocks that handle combining or splitting CO2 streams. They enforce mass, energy, and momentum balances with specific modifications like custom inequality constraints for pressures.
+* **`co2_eor/MPF/`**: Contains the configuration file for building the IDAES modular properties framework Peng-Robinson Cubic equation of state. The mass state definitions didn't really work so they are not used. 
 * **`co2_eor/flowsheets/`**: Contains the current main network assembly and optimization scripts. These scripts connect the individual unit models into full EOR distribution networks.
-* **`co2_eor/util_funcs.py`**: Utility functions for defining NLP solver configurations (IPOPT, CONOPT, BONMIN, etc.) and post-processing. Includes the `export_flowsheet_to_excel` function, which automatically detects all `pipeline`, `wellpad`, and compressor blocks in a flowsheet to generate a consolidated Excel report.
+* **`co2_eor/util_funcs.py`**: Utility functions for defining NLP solver configurations (IPOPT, CONOPT, BONMIN, etc.) and post-processing. Includes the `export_flowsheet_to_excel` function, which automatically detects most unit models in a flowsheet to generate a consolidated Excel report.
 
-*(Note: `mFTPx.py`, `thermo_config.py`, and the `deprecated` directories contain older or alternative approaches and properties.)*
+## Custom Unit Models
+* **`co2_eor/gas_pipe/`**: Isothermal vapor flow pipe hydraulic model from 'Gas Pipeline Hydraulics' by Menon
+* **`co2_eor/liq_pipe/`**: Nonisothermal supercritical CO2 pipe hydraulic model by Martynov et al.
+* **`co2_eor/wellpattern_HH/`**: Custom well pattern model for incremental oil production from co2 injection. Currently hardcoded that inlet flow stream contains single component named 'CO2' and outlet flow streams contain 'co2' and 'ch4'. Might try to make more general later.
+* **`co2_eor/processing_facility/`**: Simple yield-based separation model, also has custom costing block hardcoded into it.
+* **`co2_eor/mpf_to_helmholtz/`**: Unit model that converts a MPF mixed component stream into a pure helmholtz eos stream.
+* **`co2_eor/mixer_unit/`**: Standard IDAES mixer unit, no changes.
+* **`co2_eor/splitter_unit/`**: Standard IDAES splitter unit, added a momentum balance type.
+* **`co2_eor/heater_unit/`**: Standard IDAES heater unit, added a custom costing block that assumes heat duty will be negative.
+* **`co2_eor/SSLW/`**: Standard IDAES SSLW costing file. Added smooth log functions from IDAES math util funcs. Might try to make it so these are not needed.
+* **`co2_eor/util_funcs`**: Contains functions for exporting unit model data into dataframes and compiling them. Also has default solver options, custom initialization function (currently deprecated), and custom function for printing wide dataframes (AI-generated).
+
+*(Note: `deprecated` directories contain older or alternative approaches and properties.)*
 
 ## Current Workflow
-The typical workflow for running an optimization, as seen in the current active flowsheets (`flowsheet5.py` and `flowsheet6.py`), follows a standard IDAES optimization pattern:
+The typical workflow for running an optimization, as seen in the current active flowsheets follows a standard IDAES optimization pattern:
 
 1. **Model Setup**:
    * Create a Pyomo `ConcreteModel` and an IDAES `FlowsheetBlock`.
@@ -35,7 +45,7 @@ The typical workflow for running an optimization, as seen in the current active 
    * Add global constraints (e.g., a total oil production target constraint).
    * Unfix decision variables (like pipeline diameters and flow rates) and deactivate slack variables used during initialization.
    * Scale the model using Pyomo's `core.scale_model` transformation.
-   * Solve the scaled Non-Linear Program using a designated solver (e.g., IPOPT or CONOPT).
+   * Solve the scaled Non-Linear Program using a designated solver (e.g., IPOPT or CONOPT). Currently CONOPT works best.
 
 5. **Post-Processing**:
    * Unscale the model and verify optimal termination.

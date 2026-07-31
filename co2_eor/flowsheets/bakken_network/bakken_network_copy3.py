@@ -27,8 +27,6 @@ from co2_eor.gas_pipe import gasPipe
 from co2_eor.processing_facility import processingFacility
 from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
 
-from co2_eor.custom_costing import customCostingBlock, cost_processing_facility_simple
-
 from co2_eor.util_funcs import ipopt, conopt
 
 

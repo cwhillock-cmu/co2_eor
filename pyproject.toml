@@ -11,6 +11,8 @@ dependencies = [
     "idaes-pse",
     "numpy",
     "pandas",
+    "readchar,
+    "IPython"
 ]
 
 [project.optional-dependencies]
