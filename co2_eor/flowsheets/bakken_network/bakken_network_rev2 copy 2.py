@@ -504,7 +504,7 @@ m.fs.recycle_comp.outlet.pressure[0].unfix()
 #    getattr(m.fs, "pipe"+str(i)).diameter.unfix()
 
 #create production target
-m.fs.prod_target = pyo.Param(mutable=True,initialize=420000) #STB/yr
+m.fs.prod_target = pyo.Param(mutable=True,initialize=560000) #STB/yr
 #production target constraint
 @m.fs.Constraint()
 def production_target_constraint(fs):
@@ -549,7 +549,7 @@ def initialization_type2(m):
     ipopt.options['max_iter'] = 1000
     ipopt.options['linear_solver']='ma97'
     try: 
-        res=conopt.solve(scaled_m,tee=True)
+        res=ipopt.solve(scaled_m,tee=True)
         pass
     except ValueError:
         pass
@@ -744,7 +744,7 @@ with open('temps/bakken_network_presolve_pprint.txt', 'w') as f:
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
 ipopt.options['max_iter'] = 4000
-ipopt.options['linear_solver']='ma27'
+ipopt.options['linear_solver']='ma97'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
 ipopt.options['nlp_scaling_method']='gradient-based'
@@ -752,7 +752,7 @@ ipopt.options['expect_infeasible_problem']='yes'
 ipopt.options['OF_evaluate_orig_obj_at_resto_trial']='no'
 ipopt.options['OF_start_with_resto']='yes'
 #ipopt.options['OF_soft_resto_pderror_reduction_factor']=0
-res=conopt.solve(scaled_m,tee=True)
+res=ipopt.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
@@ -774,12 +774,12 @@ from co2_eor.util_funcs import export_flowsheet_to_excel
 export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve2.xlsx')
 
 #pause program
-"""
+#"""
 import readchar
 print("Press any key to continue...")
 key = readchar.readkey() 
 print(f"Resumed after pressing: {key}")
-"""
+#"""
 
 m.fs.obj_with_revenue.deactivate()
 m.fs.obj_no_revenue.activate()
@@ -806,9 +806,9 @@ ipopt.options['OF_start_with_resto']='yes'
 #ipopt.options['nlp_scaling_method']='none'
 conopt.options['iterlim']=500
 
-with open('temps/bakken_sweep_final/bakken_sweep_final_pprint.txt', 'w') as f:
-    with contextlib.redirect_stdout(f):
-        m.pprint()
+#with open('temps/bakken_sweep_final/bakken_sweep_final_pprint.txt', 'w') as f:
+#    with contextlib.redirect_stdout(f):
+#        m.pprint()
 
 def safe_solve(m,write_directory=None):
     if write_directory == None:

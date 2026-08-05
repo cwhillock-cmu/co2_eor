@@ -9,3 +9,4 @@ temps/
 .vscode/
 extras/
 *.json
+.ds_store

@@ -666,7 +666,7 @@ ipopt.options['max_iter'] = 4000
 ipopt.options['linear_solver']='ma97'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
-res=conopt.solve(scaled_m,tee=True)
+res=ipopt.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
@@ -686,29 +686,3 @@ m.fs.visualize("bakken_network")
 
 from co2_eor.util_funcs import export_flowsheet_to_excel
 export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve.xlsx')
-
-#pause program
-import readchar
-
-prod_targets = np.linspace(100000,3000000,59)
-for prod_target in prod_targets:
-    m.fs.prod_target=prod_target
-    #seq.run(m,SD_solve)
-    scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
-    with open(rf'temps/bakken_sweep/bakken_{int(prod_target)}_solver_output.txt', 'w') as f:
-        with contextlib.redirect_stdout(f):
-            res = conopt.solve(scaled_m,tee=True)
-    if res.solver.termination_condition == pyo.TerminationCondition.optimal:
-        pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
-        with open(rf'temps/bakken_sweep/bakken_{int(prod_target)}_postsolve_display.txt', 'w') as f:
-            with contextlib.redirect_stdout(f):
-                m.display()
-        print(f'target {prod_target} solved')
-        export_flowsheet_to_excel(m.fs, rf'temps/bakken_sweep/bakken_{int(prod_target)}_export.xlsx')
-    else:
-        print(f'target {prod_target} failed')
-        
-
-print("Press any key to continue...")
-key = readchar.readkey() 
-print(f"Resumed after pressing: {key}")
