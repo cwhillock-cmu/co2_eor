@@ -2,20 +2,27 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [project]
 name = "co2_eor"
 version = "0.1.0"
 description = "models for co2 eor optimization"
 dependencies = [
     "pyomo",
-    "idaes-pse",
+    "idaes-pse[ui]",
     "numpy",
     "pandas",
     "readchar",
     "IPython",
+    "openpyxl>=3.1.5",
 ]
 
 [project.optional-dependencies]
 test = [
     "pytest",
 ]
+
+[tool.uv.sources]
+idaes-pse = { git = "https://github.com/cwhillock-cmu/idaes-pse", branch = "main" }
