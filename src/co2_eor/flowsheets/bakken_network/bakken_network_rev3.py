@@ -197,7 +197,6 @@ m.fs.comp2.efficiency_isentropic.fix(0.85)
 m.fs.comp2.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp2.inlet.pressure[0]>=80*100000)
 
 m.fs.well2 = wellpattern(**wellpattern_config)
-#m.fs.well2.HCPV.fix(1.0)
 m.fs.well2.HCPV.fix(0.9)
 
 m.fs.s_split0_pipe1 = Arc(source=m.fs.split0.to_pipe1,destination=m.fs.pipe1.inlet)
@@ -276,7 +275,6 @@ m.fs.comp5.efficiency_isentropic.fix(0.85)
 m.fs.comp5.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp5.inlet.pressure[0]>=80*100000)
 
 m.fs.well5 = wellpattern(**wellpattern_config)
-#m.fs.well5.HCPV.fix(0.9)
 m.fs.well5.HCPV.fix(1.0)
 
 m.fs.pipe8 = liqPipe(**liqPipe_config,length=4000)
@@ -402,14 +400,13 @@ m.fs.s_purge_splitter_recycle_comp = Arc(source=m.fs.purge_splitter.to_recycle_c
 #expand arcs
 pyo.TransformationFactory("network.expand_arcs").apply_to(m)
 
-#check degrees of freedom
-print(f'D.o.F before specifying anything={idaes.core.util.model_statistics.degrees_of_freedom(m)}')
+print(f'starting solve')
 
 #inlet specifications
 m.fs.source_comp.inlet.pressure[0].fix(100*100000)
 m.fs.source_comp.inlet.enth_mol[0].fix(m.fs.props1.htpx(T=298*units.K,p=100*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE))
 
-#initialization dof
+#fix initialization 1 dof
 
 m.fs.source_comp.outlet.pressure[0].fix(200*100000)
 m.fs.source_comp.inlet.flow_mol[0].fix(80)
@@ -497,11 +494,10 @@ initialization_type1(m)
 m.fs.source_comp.inlet.flow_mol[0].unfix()
 m.fs.source_comp.outlet.pressure[0].unfix()
 m.fs.recycle_comp.outlet.pressure[0].unfix()
-#m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
-#for i in range(1,7):
-#    getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
-#for i in range(1,15):
-#    getattr(m.fs, "pipe"+str(i)).diameter.unfix()
+m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
+for i in range(1,7):
+    getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
+m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
 
 #create production target
 m.fs.prod_target = pyo.Param(mutable=True,initialize=560000) #STB/yr
@@ -516,10 +512,8 @@ def production_target_constraint(fs):
 
 #initialization 2
 
-#unfix initialization 2 dof
-m.fs.source_comp.inlet.flow_mol[0].unfix()
-m.fs.source_comp.outlet.pressure[0].unfix()
-m.fs.recycle_comp.outlet.pressure[0].unfix()
+#fix initialization 2 dof
+#m.fs.purge_splitter.split_fraction[0,'purge'].fix(1e-14)
 
 @m.fs.Objective()
 def flowsheet_feasibility_objective(fs):
@@ -573,6 +567,9 @@ initialization_type2(m)
 with open('temps/bakken_network_postinitialization2_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
+
+#unfix initialization 2 degrees of freedom
+#m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
 
 #initialization 3
 
@@ -676,18 +673,19 @@ with open('temps/bakken_network_postinitialization3_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
 
-#unfix all initialization degrees of freedom
+#unfix initialization 3 degrees of freedom
 m.fs.source_comp.inlet.flow_mol[0].unfix()
 m.fs.source_comp.outlet.pressure[0].unfix()
 m.fs.recycle_comp.outlet.pressure[0].unfix()
 m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
 for i in range(1,7):
     getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
+
+#unfix optimization degrees of freedom
 for i in range(0,15):
     getattr(m.fs, "pipe"+str(i)).diameter.unfix()
 
 m.fs.CW_price = pyo.Param(initialize=0.06) #$/m3
-#m.fs.CW_price = pyo.Param(initialize=0.0) #$/m3
 #create economic terms
 @m.fs.Expression()
 def opex(fs):
@@ -696,7 +694,6 @@ def opex(fs):
         electrical_power += getattr(fs,"comp"+str(i)).work_mechanical[0]
     return 365*24*3600* (5E-8*electrical_power+m.fs.CW_price*fs.chiller.q_CW) + fs.procFac.costing.opex#/3600/24/365 #+ fs.procFac.costing.capital_cost*0.16 # 
 
-#m.fs.co2_price = pyo.Param(initialize=0.05)
 m.fs.co2_price = pyo.Param(initialize=0.068)
 m.fs.raw_mats = pyo.Expression(
     expr=365*24*3600* m.fs.co2_price*m.fs.pipe0.control_volume.properties_in[0].flow_mass
@@ -720,7 +717,6 @@ def capex(fs):
     return expr
 
 m.fs.capital_recovery_factor = pyo.Param(initialize=0.1315)
-#m.fs.capital_recovery_factor = pyo.Param(initialize=0.1019)
 m.fs.obj_with_revenue = pyo.Objective(
     expr=(m.fs.capex*m.fs.capital_recovery_factor+m.fs.opex+m.fs.raw_mats-m.fs.revenue)/10000
 )
@@ -740,11 +736,21 @@ with open('temps/bakken_network_presolve_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.pprint()
 
+#check degrees of freedom
+print(f'number of variables={len(list(m.component_data_objects(pyo.Var)))}')
+print(f'number of constraints={len(list(m.component_data_objects(pyo.Constraint)))}')
+DoF = idaes.core.util.model_statistics.degrees_of_freedom(m)
+print(f'degrees of freedom={DoF}')
+#model D.o.F should be missing the purge stream outlet pressure because IDAES does not count variables not in active equality constraints
+m.fs.purge_splitter.purge.pressure[0].fix(2*100000)
+assert idaes.core.util.model_statistics.degrees_of_freedom(m) == DoF
+m.fs.purge_splitter.purge.pressure[0].unfix()
+
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
 ipopt.options['max_iter'] = 4000
-ipopt.options['linear_solver']='ma97'
+ipopt.options['linear_solver']='ma27'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
 ipopt.options['nlp_scaling_method']='gradient-based'
@@ -768,16 +774,23 @@ print(f'raw_mats = {pyo.value(m.fs.raw_mats)}')
 print(f'revenue = {pyo.value(m.fs.revenue)}')
 
 #visualize flowsheet
-#m.fs.visualize("bakken_network")
+m.fs.visualize("bakken_network")
 
 from co2_eor.util_funcs import export_flowsheet_to_excel
-export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve2.xlsx')
+export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve3.xlsx')
 
 #pause program
 #"""
+import sys
 import readchar
-print("Press any key to continue...")
-key = readchar.readkey() 
+
+print("Press any key to continue (or 'q' to quit)...")
+key = readchar.readkey()
+
+if key.lower() == "q":
+    print("Exiting program.")
+    sys.exit()
+
 print(f"Resumed after pressing: {key}")
 #"""
 
@@ -786,12 +799,6 @@ m.fs.obj_no_revenue.activate()
 m.fs.obj_all_revenue.deactivate()
 m.fs.production_target_constraint.activate()
 m.fs.oil_price = 70
-
-#ipopt.options['max_iter'] = 4000
-#ipopt.options['linear_solver']='ma97'
-#m.fs.prod_target = 500000
-#res=ipopt.solve(scaled_m,tee=True)
-#export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve2.xlsx')
 
 from pyomo.common.errors import ApplicationError
 
