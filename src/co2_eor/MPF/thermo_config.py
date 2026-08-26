@@ -6,7 +6,7 @@ from idaes.core import Component, PhaseType, LiquidPhase, VaporPhase
 from idaes.models.properties.modular_properties.state_definitions import FTPx, FcTP, FcPh
 from idaes.models.properties.modular_properties.eos.ceos import Cubic, CubicType
 from idaes.models.properties.modular_properties.eos.ideal import Ideal
-from idaes.models.properties.modular_properties.pure import NIST
+from idaes.models.properties.modular_properties.pure import NIST, Constant
 
 #VISCOSITY
 from idaes.models.properties.modular_properties.pure import ChungViscosityPure
@@ -16,14 +16,92 @@ from idaes.models.properties.modular_properties.transport_properties.viscosity_w
 
 #VLE
 from idaes.models.properties.modular_properties.phase_equil import SmoothVLE
-from idaes.models.properties.modular_properties.phase_equil.bubble_dew import LogBubbleDew
+from idaes.models.properties.modular_properties.phase_equil.bubble_dew import LogBubbleDew, IdealBubbleDew
 from idaes.models.properties.modular_properties.phase_equil.forms import log_fugacity
 
 #CUSTOM
 from co2_eor.MPF import mFPhx
 from co2_eor.MPF import mFTPx, mFcTP, mFpcTP
 
-configuration_vap = {
+co2_comp_dict = {
+    "type":Component,
+    #"elemental_composition":{"C":1,"O":2},
+    "enth_mol_ig_comp":NIST,
+    "entr_mol_ig_comp":NIST,
+    "cp_mol_ig_comp":NIST,
+    "pressure_sat_comp":NIST,
+    "valid_phase_types":[PhaseType.vaporPhase],
+    "visc_d_phase_comp":{"Vap":ChungViscosityPure},
+    #"viscosity_collision_integral_callback":collision_integral_neufeld_callback,
+    "parameter_data":{
+        "mw":(44.009e-3,units.kg/units.mol),
+        "pressure_crit":(73.825*100000,units.Pa),
+        "temperature_crit":(304.23,units.K),
+        "omega":0.225,
+        "compress_fact_crit":0.275,
+        "dens_mol_crit":(10590,units.mol/units.m**3),
+        "cp_mol_ig_comp_coeff": {
+            "A":(24.99735,units.J/units.mol/units.K),
+            "B":(55.18696,units.J/units.mol/units.K**2),
+            "C":(-33.69137,units.J/units.mol/units.K**3),
+            "D":(7.948387,units.J/units.mol/units.K**4),
+            "E":(-0.136638,units.J*units.K**2/units.mol/units.K),
+            "F":(-403.6075,units.kJ/units.mol),
+            "G":(228.2431,units.J/units.mol/units.K),
+            "H":(-393.5224,units.kJ/units.mol),
+        },
+        "dipole_moment":(0,units.debye),
+        "association_factor_chung":0,
+        "pressure_sat_comp_coeff":{
+                "A":6.81228,
+                "B":(1301.679,units.K),
+                "C":(-3.494,units.K),
+            },
+        "entr_mol_form_liq_comp_ref":(0,units.J/units.mol/units.K), #double check this
+        "enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
+    },
+}
+
+ch4_comp_dict = {
+    "type":Component,
+    #"elemental_composition":{"C":1,"H":4},
+    "enth_mol_ig_comp":NIST,
+    "entr_mol_ig_comp":NIST,
+    "cp_mol_ig_comp":NIST,
+    "pressure_sat_comp":NIST,
+    "valid_phase_types":[PhaseType.vaporPhase],
+    "visc_d_phase_comp":{"Vap":ChungViscosityPure},
+    #"viscosity_collision_integral_callback":collision_integral_neufeld_callback,
+    "parameter_data":{
+        "mw":(16.0425e-3,units.kg/units.mol),
+        "pressure_crit":(46.1*100000,units.Pa),
+        "temperature_crit":(190.6,units.K),
+        "omega":0.01142, #https://coolprop.org/fluid_properties/fluids/Methane.html
+        "dens_mol_crit":(10139,units.mol/units.m**3),
+        "compress_fact_crit":0.2869, #P/rho/R/T
+        "cp_mol_ig_comp_coeff": {
+            "A":(-0.703029,units.J/units.mol/units.K),
+            "B":(108.4773,units.J/units.mol/units.K**2),
+            "C":(-42.52157,units.J/units.mol/units.K**3),
+            "D":(5.862788,units.J/units.mol/units.K**4),
+            "E":(0.678565,units.J*units.K**2/units.mol/units.K),
+            "F":(-76.84376,units.kJ/units.mol),
+            "G":(158.7163,units.J/units.mol/units.K),
+            "H":(-74.87310,units.kJ/units.mol),
+        },
+        "dipole_moment":(0,units.debye),
+        "association_factor_chung":0,
+        "pressure_sat_comp_coeff":{ #really shouldn't need these
+                "A":4.22061,
+                "B":(516.689,units.K),
+                "C":(11.223,units.K),
+            },
+        "entr_mol_form_liq_comp_ref":(0,units.J/units.mol/units.K), #double check this
+        "enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
+    },
+}
+
+configuration_vap_cubic = {
     "base_units":{
         "time":units.s,
         "length":units.m,
@@ -32,82 +110,8 @@ configuration_vap = {
         "temperature":units.K,
     },
     "components":{
-        "co2":{
-            "type":Component,
-            "elemental_composition":{"C":1,"O":2},
-            "enth_mol_ig_comp":NIST,
-            "entr_mol_ig_comp":NIST,
-            "cp_mol_ig_comp":NIST,
-            "pressure_sat_comp":NIST,
-            "valid_phase_types":[PhaseType.vaporPhase],
-            "visc_d_phase_comp":{"Vap":ChungViscosityPure},
-            #"viscosity_collision_integral_callback":collision_integral_neufeld_callback,
-            "parameter_data":{
-                "mw":(44.009e-3,units.kg/units.mol),
-                "pressure_crit":(73.825*100000,units.Pa),
-                "temperature_crit":(304.23,units.K),
-                "omega":0.225,
-                "compress_fact_crit":0.275,
-                "dens_mol_crit":(10590,units.mol/units.m**3),
-                "cp_mol_ig_comp_coeff": {
-                    "A":(24.99735,units.J/units.mol/units.K),
-                    "B":(55.18696,units.J/units.mol/units.K**2),
-                    "C":(-33.69137,units.J/units.mol/units.K**3),
-                    "D":(7.948387,units.J/units.mol/units.K**4),
-                    "E":(-0.136638,units.J*units.K**2/units.mol/units.K),
-                    "F":(-403.6075,units.kJ/units.mol),
-                    "G":(228.2431,units.J/units.mol/units.K),
-                    "H":(-393.5224,units.kJ/units.mol),
-                },
-                "dipole_moment":(0,units.debye),
-                "association_factor_chung":0,
-                "pressure_sat_comp_coeff":{
-                        "A":6.81228,
-                        "B":(1301.679,units.K),
-                        "C":(-3.494,units.K),
-                    },
-                "entr_mol_form_liq_comp_ref":(0,units.J/units.mol/units.K), #double check this
-                "enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
-            },
-        },
-        "ch4":{
-            "type":Component,
-            "elemental_composition":{"C":1,"H":4},
-            "enth_mol_ig_comp":NIST,
-            "entr_mol_ig_comp":NIST,
-            "cp_mol_ig_comp":NIST,
-            "pressure_sat_comp":NIST,
-            "valid_phase_types":[PhaseType.vaporPhase],
-            "visc_d_phase_comp":{"Vap":ChungViscosityPure},
-            #"viscosity_collision_integral_callback":collision_integral_neufeld_callback,
-            "parameter_data":{
-                "mw":(16.0425e-3,units.kg/units.mol),
-                "pressure_crit":(46.1*100000,units.Pa),
-                "temperature_crit":(190.6,units.K),
-                "omega":0.01142, #https://coolprop.org/fluid_properties/fluids/Methane.html
-                "dens_mol_crit":(10139,units.mol/units.m**3),
-                "compress_fact_crit":0.2869, #P/rho/R/T
-                "cp_mol_ig_comp_coeff": {
-                    "A":(-0.703029,units.J/units.mol/units.K),
-                    "B":(108.4773,units.J/units.mol/units.K**2),
-                    "C":(-42.52157,units.J/units.mol/units.K**3),
-                    "D":(5.862788,units.J/units.mol/units.K**4),
-                    "E":(0.678565,units.J*units.K**2/units.mol/units.K),
-                    "F":(-76.84376,units.kJ/units.mol),
-                    "G":(158.7163,units.J/units.mol/units.K),
-                    "H":(-74.87310,units.kJ/units.mol),
-                },
-                "dipole_moment":(0,units.debye),
-                "association_factor_chung":0,
-                "pressure_sat_comp_coeff":{ #really shouldn't need these
-                        "A":4.22061,
-                        "B":(516.689,units.K),
-                        "C":(11.223,units.K),
-                    },
-                "entr_mol_form_liq_comp_ref":(0,units.J/units.mol/units.K), #double check this
-                "enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
-            },
-        },
+        "co2":co2_comp_dict,
+        "ch4":ch4_comp_dict,
     },
     "phases":{
         "Vap":{
@@ -128,6 +132,7 @@ configuration_vap = {
     },
     "pressure_ref":(101325,units.Pa), #double check this
     "temperature_ref":(298.15,units.K), #double check this
+    "include_enthalpy_of_formation":True,
     # Defining phase equilibria
     #"phases_in_equilibrium": [("Vap", "Liq")],
     #"phase_equilibrium_state": {("Vap", "Liq"): SmoothVLE},
@@ -179,12 +184,12 @@ configuration_vap = {
     },
 """
 
-configuration_liq = copy.deepcopy(configuration_vap)
-configuration_liq['components']['co2']['valid_phase_types'] = [PhaseType.liquidPhase]
-configuration_liq['components']['co2']['visc_d_phase_comp'] = {'Liq':None}
-configuration_liq['components']['ch4']['valid_phase_types'] = [PhaseType.liquidPhase]
-configuration_liq['components']['ch4']['visc_d_phase_comp'] = {'Liq':None}
-configuration_liq['phases'] = {
+configuration_liq_cubic = copy.deepcopy(configuration_vap_cubic)
+configuration_liq_cubic['components']['co2']['valid_phase_types'] = [PhaseType.liquidPhase]
+configuration_liq_cubic['components']['co2']['visc_d_phase_comp'] = {'Liq':None}
+configuration_liq_cubic['components']['ch4']['valid_phase_types'] = [PhaseType.liquidPhase]
+configuration_liq_cubic['components']['ch4']['visc_d_phase_comp'] = {'Liq':None}
+configuration_liq_cubic['phases'] = {
     'Liq': {
         "type":LiquidPhase,
         "equation_of_state":Cubic,
@@ -193,14 +198,14 @@ configuration_liq['phases'] = {
     }
 }
 
-configuration_VLE = copy.deepcopy(configuration_vap)
-configuration_VLE['components']['co2']['valid_phase_types'] = [PhaseType.liquidPhase,PhaseType.vaporPhase]
-configuration_VLE['components']['co2']['visc_d_phase_comp'] = {'Liq':None,'Vap':ChungViscosityPure}
-configuration_VLE['components']['co2']['phase_equilibrium_form'] = {("Vap", "Liq"): log_fugacity}
-configuration_VLE['components']['ch4']['valid_phase_types'] = [PhaseType.liquidPhase,PhaseType.vaporPhase]
-configuration_VLE['components']['ch4']['visc_d_phase_comp'] = {'Liq':None,'Vap':ChungViscosityPure}
-configuration_VLE['components']['ch4']['phase_equilibrium_form'] = {("Vap", "Liq"): log_fugacity}
-configuration_VLE['phases'] = {
+configuration_VLE_cubic = copy.deepcopy(configuration_vap_cubic)
+configuration_VLE_cubic['components']['co2']['valid_phase_types'] = [PhaseType.liquidPhase,PhaseType.vaporPhase]
+configuration_VLE_cubic['components']['co2']['visc_d_phase_comp'] = {'Liq':None,'Vap':ChungViscosityPure}
+configuration_VLE_cubic['components']['co2']['phase_equilibrium_form'] = {("Vap", "Liq"): log_fugacity}
+configuration_VLE_cubic['components']['ch4']['valid_phase_types'] = [PhaseType.liquidPhase,PhaseType.vaporPhase]
+configuration_VLE_cubic['components']['ch4']['visc_d_phase_comp'] = {'Liq':None,'Vap':ChungViscosityPure}
+configuration_VLE_cubic['components']['ch4']['phase_equilibrium_form'] = {("Vap", "Liq"): log_fugacity}
+configuration_VLE_cubic['phases'] = {
     'Liq': {
         "type":LiquidPhase,
         "equation_of_state":Cubic,
@@ -215,6 +220,62 @@ configuration_VLE['phases'] = {
         "transport_property_options": {"viscosity_phi_ij_callback": herring_zimmer_phi_ij_callback},
     }
 }
-configuration_VLE['phases_in_equilibrium'] = [("Vap", "Liq")]
-configuration_VLE['phase_equilibrium_state'] = {("Vap", "Liq"): SmoothVLE}
-configuration_VLE['bubble_dew_method'] = LogBubbleDew
+configuration_VLE_cubic['phases_in_equilibrium'] = [("Vap", "Liq")]
+configuration_VLE_cubic['phase_equilibrium_state'] = {("Vap", "Liq"): SmoothVLE}
+configuration_VLE_cubic['bubble_dew_method'] = LogBubbleDew
+
+configuration_vap_ideal = copy.deepcopy(configuration_vap_cubic)
+configuration_vap_ideal['phases']['Vap']['equation_of_state'] = Ideal
+configuration_vap_ideal['phases']['Vap'].pop('equation_of_state_options')
+configuration_vap_ideal.pop("parameter_data")
+
+configuration_liq_ideal = copy.deepcopy(configuration_liq_cubic)
+configuration_liq_ideal['phases']['Liq']['equation_of_state'] = Ideal
+configuration_liq_ideal['phases']['Liq'].pop('equation_of_state_options')
+configuration_liq_ideal.pop("parameter_data")
+
+configuration_VLE_ideal = copy.deepcopy(configuration_VLE_cubic)
+configuration_VLE_ideal['phases']['Vap']['equation_of_state'] = Ideal
+configuration_VLE_ideal['bubble_dew_method'] = IdealBubbleDew
+configuration_VLE_ideal.pop("parameter_data")
+
+from co2_eor.MPF.dissolved_gas_props import custom_calc
+solvent_comp_dict = {
+    "type":Component,
+    "cp_mol_liq_comp":Constant,
+    "enth_mol_liq_comp":Constant,
+    #"entr_mol_liq_comp":Constant,
+    "dens_mol_liq_comp":Constant,
+    #"cp_mol_ig_comp":Constant,
+    #"enth_mol_ig_comp":Constant,
+    #"entr_mol_ig_comp":Constant,
+    #"pressure_sat_comp":NIST,
+    "valid_phase_types":{PhaseType.liquidPhase},
+    #"valid_phase_types":{PhaseType.vaporPhase,PhaseType.liquidPhase},
+    "visc_d_phase_comp":{"Liq":None},
+    "parameter_data":{
+        #www.netl.doe.gov/sites/default/files/event-proceedings/2015/co2captureproceedings/N-Siefert-NETL-Hydrophobic-Solvents.pdf
+        "mw":(280e-3,units.kg/units.mol),
+        "cp_mol_liq_comp_coeff":(2.05e3*280e-3,units.J/units.mol/units.K),
+        "dens_mol_liq_comp_coeff":(1030*280e-3,units.mol/units.m**3),
+        #"cp_mol_ig_comp_coeff":(363,units.J/units.K/units.mol), #from a quick group contribution calculation
+        #"pressure_sat_comp_coeff":{
+        #    "A":-6, #estimated from vapor pressure single data point
+        #    "B":(0,units.K),
+        #    "C":(-4,units.K),
+        #}
+        "entr_mol_form_liq_comp_ref":(0,units.J/units.mol/units.K), #double check this
+        "enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
+    }
+}
+
+configuration_liq_absorption = copy.deepcopy(configuration_liq_ideal)
+configuration_liq_absorption['components']['selexol'] = solvent_comp_dict
+configuration_liq_absorption['components']['co2']['parameter_data']['enth_diss'] = (8.314*1720,units.J/units.mol) #R*(-B) from https://doi.org/10.1016/j.ijggc.2015.04.015
+configuration_liq_absorption['components']['ch4']['parameter_data']['enth_diss'] = (8.314*1720,units.J/units.mol) #same as above
+configuration_liq_absorption['components']['co2']['parameter_data']['dens_mol_liq_comp_coeff'] = (1030*280e-3,units.mol/units.m**3) #same as solvent density
+configuration_liq_absorption['components']['ch4']['parameter_data']['dens_mol_liq_comp_coeff'] = (1030*280e-3,units.mol/units.m**3) #same as solvent density
+configuration_liq_absorption['components']['co2']['enth_mol_liq_comp'] = custom_calc
+configuration_liq_absorption['components']['ch4']['enth_mol_liq_comp'] = custom_calc
+configuration_liq_absorption['components']['co2']['dens_mol_liq_comp'] = Constant
+configuration_liq_absorption['components']['ch4']['dens_mol_liq_comp'] = Constant
