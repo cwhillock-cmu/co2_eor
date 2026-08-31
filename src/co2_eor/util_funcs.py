@@ -204,22 +204,29 @@ from idaes.core.util.initialization import propagate_state
 from co2_eor.mixer_unit import Mixer as mixer
 from co2_eor.splitter_unit import Separator as splitter
 from co2_eor.wellpattern_HH import wellpattern
+from idaes.core.util.exceptions import InitializationError
 def custom_initialize_unit(unit):
     try:
         unit.initialize()
-    except ValueError:
+    except (ValueError, InitializationError) as e:
         #just in case, try deactivating unit feasibility problem
+        print(f'caught {e}')
         try:
             unit.deactivate_feasibility_problem()
         except AttributeError:
+            print(f'caught AttributeError')
             pass
         if isinstance(unit,(mixer, splitter, wellpattern)):
             #if unit is one of these, would take more effort to propagate the state, just return and hope for the best
+            #try to give it 5 iterations of ipopt
+            ipopt.options['max_iter']=5
+            ipopt.solve(unit,tee=False)
+            ipopt.options['max_iter']=3000
             return
         print(f'call unit.initialize() failed, propagating state')
         #unit.display()
         #input()
-        propagate_state(unit.inlet,unit.outlet)
+        propagate_state(source=unit.inlet,destination=unit.outlet)
  
 #THIS FUNCTION IS AI-GENERATED 
 from IPython.display import display 

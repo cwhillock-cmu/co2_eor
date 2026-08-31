@@ -22,7 +22,7 @@ from co2_eor.util_funcs import export_compressor_df
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
 from co2_eor.liq_pipe import liqPipe
 from co2_eor.wellpattern_HH import wellpattern
-from co2_eor.MPF.thermo_config import configuration_vap
+import co2_eor.MPF.thermo_config as thermo_config
 from co2_eor.gas_pipe import gasPipe
 from co2_eor.processing_facility import processingFacility
 from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
@@ -37,7 +37,7 @@ m.fs.props1 = idaesHelmholtz.HelmholtzParameterBlock(
         state_vars=idaesHelmholtz.StateVars.PH,phase_presentation=idaesHelmholtz.PhaseType.MIX,
         #has_phase_equilibrium=False,
         )
-m.fs.props2 = GenericParameterBlock(**configuration_vap)
+m.fs.props2 = GenericParameterBlock(**thermo_config.configuration_vap_cubic)
 
 m.fs.costing = SSLWCosting()
 
@@ -155,6 +155,7 @@ m.fs.chiller.outlet_temp_eq2 = pyo.Constraint(expr=m.fs.chiller.control_volume.p
 #    costing_method = SSLWCostingData.cost_heat_exchanger,
 #)
 m.fs.chiller.costing = pyo.Block()
+m.fs.chiller.control_volume.heat.setub(0)
 m.fs.chiller.costing.capital_cost = pyo.Expression(expr=1000*(m.fs.chiller.area+0.1)**0.65*1.4*3*4)
 
 m.fs.s_source_comp_pipe0 = Arc(source=m.fs.source_comp.outlet,destination=m.fs.pipe0.inlet)
@@ -514,6 +515,9 @@ def production_target_constraint(fs):
 
 #fix initialization 2 dof
 #m.fs.purge_splitter.split_fraction[0,'purge'].fix(1e-14)
+m.fs.source_comp.inlet.flow_mol[0].unfix()
+for i in range(1,7):
+    getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
 
 @m.fs.Objective()
 def flowsheet_feasibility_objective(fs):
@@ -523,6 +527,11 @@ def flowsheet_feasibility_objective(fs):
     #for i in range(1,7):
     #    expr += getattr(fs,"well"+str(i)).feasibility_expression
     return expr
+m.fs.flowsheet_feasibility_objective.deactivate()
+@m.fs.Objective()
+def test_obj(fs):
+    return fs.source_comp.inlet.flow_mol[0]
+m.fs.test_obj.deactivate()
 
 with open('temps/bakken_network_preinitialization2_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
@@ -530,18 +539,19 @@ with open('temps/bakken_network_preinitialization2_pprint.txt', 'w') as f:
 
 def initialization_type2(m):
 
-    for i in range(1,15):
-        getattr(m.fs, "pipe"+str(i)).activate_slack_variables()
+    #for i in range(1,15):
+    #    getattr(m.fs, "pipe"+str(i)).activate_slack_variables()
     #for i in range(1,7):
     #    getattr(m.fs,"well"+str(i)).activate_slack_variables()
-
+    m.fs.test_obj.activate()
     #scale model
     scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
     #solve flowsheet
     ipopt.options['acceptable_tol']=1E-4
     ipopt.options['tol']=1E-6
     ipopt.options['max_iter'] = 1000
-    ipopt.options['linear_solver']='ma97'
+    ipopt.options['OF_accept_every_trial_step'] = 'yes'
+    ipopt.options['linear_solver']='ma27'
     try: 
         res=ipopt.solve(scaled_m,tee=True)
         pass
@@ -550,11 +560,13 @@ def initialization_type2(m):
     ipopt.options['acceptable_tol']=1E-6
     ipopt.options['tol']=1E-8
     ipopt.options['linear_solver']='ma27'
+    ipopt.options['OF_accept_every_trial_step'] = 'no'
     #unscale model
     pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
+    m.fs.test_obj.deactivate()
     #deactivate flowsheet feasibility problem
-    m.fs.flowsheet_feasibility_objective.deactivate()
+    
     for i in range(1,15):
         getattr(m.fs, "pipe"+str(i)).deactivate_feasibility_problem()
     for i in range(1,7):
@@ -667,7 +679,7 @@ def initialization_type3(m):
     seq.run(m,SD_solve)
     print(f'initialization 3 done')
 
-initialization_type3(m)
+#initialization_type3(m)
 
 with open('temps/bakken_network_postinitialization3_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
@@ -750,7 +762,7 @@ m.fs.purge_splitter.purge.pressure[0].unfix()
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
 ipopt.options['max_iter'] = 4000
-ipopt.options['linear_solver']='ma27'
+ipopt.options['linear_solver']='ma97'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
 ipopt.options['nlp_scaling_method']='gradient-based'

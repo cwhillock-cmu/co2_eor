@@ -14,6 +14,7 @@ from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.math import smooth_abs, safe_log
 from idaes.core.util.initialization import propagate_state
+import idaes.models.properties.general_helmholtz as idaesHelmholtz
 """
 block for converting a modular properties framework EOS stream
 into a helmholtz eos stream in IDAES
@@ -67,7 +68,7 @@ def add_equations(unit,config):
             )
     elif config.conversion_type == 'convert_co2':
         unit.mass_constraint = pyo.Constraint(expr=
-            inlet.flow_mass_comp['co2'] == outlet.flow_mass
+            inlet.flow_mol_comp['co2'] == outlet.flow_mol
             )
     elif config.conversion_type == 'convert_all_mol':
         unit.mass_constraint = pyo.Constraint(expr=
@@ -107,8 +108,14 @@ class mpf_helmholtz_converterData(UnitModelBlockData):
         self.add_inlet_port(block=self.control_volume.properties_in,name="inlet")
         self.add_outlet_port(block=self.control_volume.properties_out,name="outlet")
 
+    def custom_propagate_state(self):
+        self.control_volume.properties_out[0].pressure = pyo.value(self.control_volume.properties_in[0].pressure)
+        self.control_volume.properties_out[0].flow_mol = pyo.value(self.control_volume.properties_in[0].flow_mol_comp['co2'])
+        self.control_volume.properties_out[0].enth_mol = self.config.property_package_out.htpx(T=pyo.value(self.control_volume.properties_in[0].temperature)*units.K,p=pyo.value(self.control_volume.properties_in[0].pressure)*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE)
+
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'initializing {self.name}')
+        self.custom_propagate_state()
         #scale model
         scaled_self = pyo.TransformationFactory('core.scale_model').create_using(self)
         if solver==None:
@@ -128,7 +135,7 @@ class mpf_helmholtz_converterData(UnitModelBlockData):
             print(f'{self.name} initialization solve successful')
         else:
             print(f'{self.name} initialization solve failed, propagating state')
-            propagate_state(self.inlet,self.outlet)
+            self.custom_propagate_state()
         print(f'{self.name} initialization complete')
         return res
     

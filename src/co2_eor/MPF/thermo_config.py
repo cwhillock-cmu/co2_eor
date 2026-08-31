@@ -126,8 +126,8 @@ configuration_vap_cubic = {
     "state_definition":FcTP,
     "state_bounds":{
         "flow_mol_comp":(-20000,1,20000,units.mol/units.s),
-        "temperature":(216,298,1500,units.K),
-        "pressure":(5e4,30*100000,2000*100000,units.Pa),
+        "temperature":(97,298,1500,units.K),
+        "pressure":(500,30*100000,2000*100000,units.Pa),
     #    "enth_mol":(3000,10000,90000,units.J/units.mol),
     },
     "pressure_ref":(101325,units.Pa), #double check this
@@ -238,44 +238,3 @@ configuration_VLE_ideal = copy.deepcopy(configuration_VLE_cubic)
 configuration_VLE_ideal['phases']['Vap']['equation_of_state'] = Ideal
 configuration_VLE_ideal['bubble_dew_method'] = IdealBubbleDew
 configuration_VLE_ideal.pop("parameter_data")
-
-from co2_eor.MPF.dissolved_gas_props import custom_calc
-solvent_comp_dict = {
-    "type":Component,
-    "cp_mol_liq_comp":Constant,
-    "enth_mol_liq_comp":Constant,
-    #"entr_mol_liq_comp":Constant,
-    "dens_mol_liq_comp":Constant,
-    #"cp_mol_ig_comp":Constant,
-    #"enth_mol_ig_comp":Constant,
-    #"entr_mol_ig_comp":Constant,
-    #"pressure_sat_comp":NIST,
-    "valid_phase_types":{PhaseType.liquidPhase},
-    #"valid_phase_types":{PhaseType.vaporPhase,PhaseType.liquidPhase},
-    "visc_d_phase_comp":{"Liq":None},
-    "parameter_data":{
-        #www.netl.doe.gov/sites/default/files/event-proceedings/2015/co2captureproceedings/N-Siefert-NETL-Hydrophobic-Solvents.pdf
-        "mw":(280e-3,units.kg/units.mol),
-        "cp_mol_liq_comp_coeff":(2.05e3*280e-3,units.J/units.mol/units.K),
-        "dens_mol_liq_comp_coeff":(1030*280e-3,units.mol/units.m**3),
-        #"cp_mol_ig_comp_coeff":(363,units.J/units.K/units.mol), #from a quick group contribution calculation
-        #"pressure_sat_comp_coeff":{
-        #    "A":-6, #estimated from vapor pressure single data point
-        #    "B":(0,units.K),
-        #    "C":(-4,units.K),
-        #}
-        "entr_mol_form_liq_comp_ref":(0,units.J/units.mol/units.K), #double check this
-        "enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
-    }
-}
-
-configuration_liq_absorption = copy.deepcopy(configuration_liq_ideal)
-configuration_liq_absorption['components']['selexol'] = solvent_comp_dict
-configuration_liq_absorption['components']['co2']['parameter_data']['enth_diss'] = (8.314*1720,units.J/units.mol) #R*(-B) from https://doi.org/10.1016/j.ijggc.2015.04.015
-configuration_liq_absorption['components']['ch4']['parameter_data']['enth_diss'] = (8.314*1720,units.J/units.mol) #same as above
-configuration_liq_absorption['components']['co2']['parameter_data']['dens_mol_liq_comp_coeff'] = (1030*280e-3,units.mol/units.m**3) #same as solvent density
-configuration_liq_absorption['components']['ch4']['parameter_data']['dens_mol_liq_comp_coeff'] = (1030*280e-3,units.mol/units.m**3) #same as solvent density
-configuration_liq_absorption['components']['co2']['enth_mol_liq_comp'] = custom_calc
-configuration_liq_absorption['components']['ch4']['enth_mol_liq_comp'] = custom_calc
-configuration_liq_absorption['components']['co2']['dens_mol_liq_comp'] = Constant
-configuration_liq_absorption['components']['ch4']['dens_mol_liq_comp'] = Constant

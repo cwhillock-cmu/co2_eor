@@ -269,7 +269,7 @@ def make_custom_costing(unit):
     unit.LMTD.fix()
     unit.CW_dT = pyo.Param(initialize=6,units=units.K)
 
-    unit.control_volume.heat.setub(0)
+    #unit.control_volume.heat.setub(0)
     #unit.area = pyo.Expression(expr=smooth_abs(unit.control_volume.heat[0]/unit.U/unit.LMTD/units.m**2)*units.m**2)
     unit.area = pyo.Expression(expr=-unit.control_volume.heat[0]/unit.U/unit.LMTD)
 

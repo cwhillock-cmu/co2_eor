@@ -200,20 +200,20 @@ def add_equations(unit,name,config):
         expr=inlet.temperature==injection_state.temperature
     )
     unit.inlet_injection_pressure_bal = pyo.Constraint(
-        expr=inlet.pressure==injection_state.pressure+unit.spos[2]-unit.sneg[2]
+        expr=inlet.pressure==injection_state.pressure#+unit.spos[2]-unit.sneg[2]
     )
 
     #mass balance between injection state and reservoir state
     unit.injection_reservoir_mass_bal = pyo.Constraint(
             expr=injection_state.flow_mass==reservoir_state.flow_mass
-            ) 
+            )
 
     #combine above to say that injection state flow_vol (m3/s) == dacrys law eqn (m3/s)
     #use smooth max so that well pattern can be "turned off" and not get negative flow
     unit.darcys_law = pyo.Constraint(
         expr=injection_state.flow_vol==
-                unit.kovr/reservoir_state.visc_d_phase["Liq"]*smooth_max(injection_state.pressure-reservoir_state.pressure,0,epsilon)+
-                        unit.spos[3]-unit.sneg[3]
+                unit.kovr/reservoir_state.visc_d_phase["Liq"]*smooth_max(injection_state.pressure-reservoir_state.pressure,0,epsilon)
+                    #+ unit.spos[3]-unit.sneg[3]
     )
 
     #sensitivity curve correction factor
@@ -326,6 +326,9 @@ def guess_scales(unit,name,config):
     set_scaling_factor(unit.spos[2],1e-7)
     set_scaling_factor(unit.sneg[2],1e-7)
 
+    set_scaling_factor(unit.spos[3],1e5)
+    set_scaling_factor(unit.sneg[3],1e5)
+
 #define wellpad class
 @declare_process_block_class("wellpattern")
 class wellpatternData(UnitModelBlockData):
@@ -357,15 +360,28 @@ class wellpatternData(UnitModelBlockData):
         self.deactivate_slack_variables()
         self.feasibility_objective.deactivate()
 
+    def custom_propagate_state(self):
+        self.control_volume.properties_out[0].temperature.value = pyo.value(self.outlet_temperature)
+        self.control_volume.properties_out[0].enth_mol.value = pyo.value(self.control_volume.properties_in[0].enth_mol)
+        self.outlet.pressure[0].value = pyo.value(self.outlet_pressure)
+        for j in self.control_volume.properties_out.component_list:
+            if j == 'co2':
+                self.outlet.flow_mol_comp[0,j].value = pyo.value(self.control_volume.properties_in[0].flow_mol)
+                self.control_volume.properties_out[0].mole_frac_comp[j].value = 1
+            else:
+                self.control_volume.properties_out[0].flow_mol_comp[j].value = 0
+                self.control_volume.properties_out[0].mole_frac_comp[j].value = 1e-14
+
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'initializing {self.name}')
+        self.custom_propagate_state()
         #activate feasibility problem
         self.activate_feasibility_problem()
         #scale model
         scaled_self = pyo.TransformationFactory('core.scale_model').create_using(self)
         if solver==None:
             solver = pyo.SolverFactory('ipopt')
-            solver.options['linear_solver']='ma97'
+            solver.options['linear_solver']='ma27'
         res = solver.solve(scaled_self,tee=tee)
         #undo scaling
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
@@ -381,18 +397,7 @@ class wellpatternData(UnitModelBlockData):
             print(f'{self.name} initialization solve successful')
         else:
             print(f'{self.name} initialization solve failed, propagating state')
-            #propagate_state(self.inlet,self.outlet)
-            #manual state propagation
-            self.control_volume.properties_out[0].temperature.value = pyo.value(self.outlet_temperature)
-            self.control_volume.properties_out[0].enth_mass.value = pyo.value(self.control_volume.properties_in[0].enth_mass)
-            self.outlet.pressure[0].value = pyo.value(self.outlet_pressure)
-            for j in self.control_volume.properties_out.component_list:
-                if j == 'co2':
-                    self.outlet.flow_mol_comp[0,j].value = pyo.value(self.control_volume.properties_in[0].flow_mol)
-                    self.control_volume.properties_out[0].mole_frac_comp[j].value = 1
-                else:
-                    self.control_volume.properties_out[0].flow_mol_comp[j].value = 0
-                    self.control_volume.properties_out[0].mole_frac_comp[j].value = 1e-14
+            self.custom_propagate_state()
         return res
 
     def export_df(self):

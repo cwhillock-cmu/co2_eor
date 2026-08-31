@@ -181,23 +181,24 @@ class processingFacilityData(UnitModelBlockData):
         self.add_port(block=self.control_volume.properties_recycle,name="recycle")
         build_costing_block(self)
 
-    def initialize(self,solver=None,tee=False,display_after=False):
-        print(f'initializing {self.name}')
+    def custom_propagate_state(self):
         self.control_volume.properties_recycle[0].pressure.value = pyo.value(self.recycle_pressure)
         self.control_volume.properties_recycle[0].temperature.value = pyo.value(self.recycle_temperature)
         self.control_volume.properties_out[0].pressure.value = pyo.value(self.outlet_pressure)
         self.control_volume.properties_out[0].temperature.value = pyo.value(self.outlet_temperature)
+
         for j in self.control_volume.properties_in.component_list:
             if j != self.key_component:
-                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value 
-                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = 0 
+                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value
+                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = 0
             else:
                 self.control_volume.properties_out[0].flow_mol_comp[self.key_component].value = 0
                 self.control_volume.properties_recycle[0].flow_mol_comp[self.key_component].value = self.control_volume.properties_in[0].flow_mol_comp[self.key_component].value
-        #try this
-        #self.control_volume.properties_in.initialize()
-        #self.control_volume.properties_in[0].mole_frac_comp.fix()
-        #self.control_volume.properties_in[0].mole_frac_comp_eq.deactivate()
+
+    def initialize(self,solver=None,tee=False,display_after=False):
+        print(f'initializing {self.name}')
+        self.custom_propagate_state()
+
         #scale model
         scaled_self = pyo.TransformationFactory('core.scale_model').create_using(self)
         if solver==None:
@@ -219,14 +220,7 @@ class processingFacilityData(UnitModelBlockData):
             #self.display()
             #input()
             print(f'{self.name} initialization solve failed, propagating state')
-            #manually propagate state in a decent enough way
-            for j in self.control_volume.properties_in.component_list:
-                if j != self.key_component:
-                    self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value
-                    self.control_volume.properties_recycle[0].flow_mol_comp[j].value = 0
-                else:
-                    self.control_volume.properties_out[0].flow_mol_comp[self.key_component].value = 0
-                    self.control_volume.properties_recycle[0].flow_mol_comp[self.key_component].value = self.control_volume.properties_in[0].flow_mol_comp[self.key_component].value
+            self.custom_propagate_state()
         return res
     
     def export_df(self,t=0):

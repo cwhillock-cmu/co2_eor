@@ -191,6 +191,9 @@ def add_equations(unit,config):
     unit.misc_logic.add(expr=outlet.flow_mass>=0)
     unit.misc_logic.add(expr=average.flow_mass>=0)
     unit.misc_logic.add(expr=inlet.pressure>=outlet.pressure)
+    #inlet.flow_mass.lb = 0
+    #outlet.flow_mass.lb = 0
+    #average.flow_mass.lb = 0
     #unit.misc_logic.deactivate
 
 def guess_scales(unit):
@@ -272,10 +275,19 @@ class gasPipeData(UnitModelBlockData):
         self.deactivate_slack_variables()
         self.feasibility_objective.deactivate()
 
+    def custom_propagate_state(self):
+        propagate_state(source=self.inlet,destination=self.outlet)
+
+        self.control_volume.properties_avg[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure)
+
+        self.outlet.temperature[0].value = pyo.value(self.control_volume.properties_in[0].temperature)
+        self.control_volume.properties_avg[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
+
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'start initialize function {self.name}')
+        self.custom_propagate_state()
         #activate feasibility problem
-        self.activate_feasibility_problem()
+        #self.activate_feasibility_problem()
         #scale model
         scaled_self = pyo.TransformationFactory('core.scale_model').create_using(self)
         if solver==None:
@@ -287,7 +299,6 @@ class gasPipeData(UnitModelBlockData):
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
         if display_after: 
             self.display()
-            self.print_all()
         if res.solver.termination_condition == pyo.TerminationCondition.optimal:
             #create autoscaler
             autoScaler=AutoScaler(overwrite=True)
@@ -296,9 +307,9 @@ class gasPipeData(UnitModelBlockData):
             print(f'{self.name} initialization solve successful')
         else:
             print(f'{self.name} initialization solve failed, propagating state')
-            propagate_state(self.inlet,self.outlet)
+            self.custom_propagate_state()
         #deactivate feasibility problem
-        self.deactivate_feasibility_problem()        
+        #self.deactivate_feasibility_problem()        
         return res
     
     def export_df(self,t=0):
