@@ -42,10 +42,10 @@ co2_comp_dict = {
         "dens_mol_crit":(10590,units.mol/units.m**3),
         "cp_mol_ig_comp_coeff": {
             "A":(24.99735,units.J/units.mol/units.K),
-            "B":(55.18696,units.J/units.mol/units.K**2),
-            "C":(-33.69137,units.J/units.mol/units.K**3),
-            "D":(7.948387,units.J/units.mol/units.K**4),
-            "E":(-0.136638,units.J*units.K**2/units.mol/units.K),
+            "B":(55.18696,units.J/units.mol/units.K/units.kiloK),
+            "C":(-33.69137,units.J/units.mol/units.K/units.kiloK**2),
+            "D":(7.948387,units.J/units.mol/units.K/units.kiloK**3),
+            "E":(-0.136638,units.J*units.kiloK**2/units.mol/units.K),
             "F":(-403.6075,units.kJ/units.mol),
             "G":(228.2431,units.J/units.mol/units.K),
             "H":(-393.5224,units.kJ/units.mol),
@@ -57,8 +57,8 @@ co2_comp_dict = {
                 "B":(1301.679,units.K),
                 "C":(-3.494,units.K),
             },
-        "entr_mol_form_liq_comp_ref":(0,units.J/units.mol/units.K), #double check this
-        "enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
+        #"enth_mol_form_vap_comp_ref": (-393.5e3, units.J / units.mol),
+        #"enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
     },
 }
 
@@ -81,10 +81,10 @@ ch4_comp_dict = {
         "compress_fact_crit":0.2869, #P/rho/R/T
         "cp_mol_ig_comp_coeff": {
             "A":(-0.703029,units.J/units.mol/units.K),
-            "B":(108.4773,units.J/units.mol/units.K**2),
-            "C":(-42.52157,units.J/units.mol/units.K**3),
-            "D":(5.862788,units.J/units.mol/units.K**4),
-            "E":(0.678565,units.J*units.K**2/units.mol/units.K),
+            "B":(108.4773,units.J/units.mol/units.K/units.kiloK),
+            "C":(-42.52157,units.J/units.mol/units.K/units.kiloK**2),
+            "D":(5.862788,units.J/units.mol/units.K/units.kiloK**3),
+            "E":(0.678565,units.J*units.kiloK**2/units.mol/units.K),
             "F":(-76.84376,units.kJ/units.mol),
             "G":(158.7163,units.J/units.mol/units.K),
             "H":(-74.87310,units.kJ/units.mol),
@@ -96,8 +96,8 @@ ch4_comp_dict = {
                 "B":(516.689,units.K),
                 "C":(11.223,units.K),
             },
-        "entr_mol_form_liq_comp_ref":(0,units.J/units.mol/units.K), #double check this
-        "enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
+        #"enth_mol_form_vap_comp_ref": (-75e3, units.J / units.mol),
+        #"enth_mol_form_liq_comp_ref":(0,units.J/units.mol), #double check this
     },
 }
 
@@ -125,9 +125,9 @@ configuration_vap_cubic = {
     },
     "state_definition":FcTP,
     "state_bounds":{
-        "flow_mol_comp":(-20000,1,20000,units.mol/units.s),
-        "temperature":(97,298,1500,units.K),
-        "pressure":(500,30*100000,2000*100000,units.Pa),
+        "flow_mol_comp":(-1e6,500,1e6,units.mol/units.s),
+        "temperature":(30,298,1500,units.K),
+        "pressure":(5e4,80*100000,2000*100000,units.Pa),
     #    "enth_mol":(3000,10000,90000,units.J/units.mol),
     },
     "pressure_ref":(101325,units.Pa), #double check this

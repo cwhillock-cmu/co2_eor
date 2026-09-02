@@ -9,6 +9,7 @@ where = ["src"]
 name = "co2_eor"
 version = "0.1.0"
 description = "models for co2 eor optimization"
+requires-python = ">=3.14"
 dependencies = [
     "pyomo",
     "idaes-pse[ui]",
