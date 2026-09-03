@@ -43,6 +43,7 @@ m.fs.props_helmholtz = idaesHelmholtz.HelmholtzParameterBlock(
         #has_phase_equilibrium=False,
         )
 m.fs.props_mix_vap_cubic = GenericParameterBlock(**thermo_config.configuration_vap_cubic)
+m.fs.props_mix_liq_cubic = GenericParameterBlock(**thermo_config.configuration_liq_cubic)
 
 #define default unit configurations 
 compressor_config = {

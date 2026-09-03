@@ -18,9 +18,9 @@ m.fs.props3 = GenericParameterBlock(**thermo_config.configuration_liq_cubic)
 
 m.fs.sb1 = m.fs.props3.build_state_block(has_phase_equilibrium=False,defined_state=True)
 
-m.fs.sb1.flow_mol_comp['co2'].fix(100)
-m.fs.sb1.flow_mol_comp['ch4'].fix(0)
-m.fs.sb1.pressure.fix(550*100000)
+m.fs.sb1.flow_mol_comp['co2'].fix(80)
+m.fs.sb1.flow_mol_comp['ch4'].fix(20)
+m.fs.sb1.pressure.fix(500*100000)
 m.fs.sb1.temperature.fix(300)
 m.fs.sb1.test_expr = pyo.Expression(expr=m.fs.sb1.pressure-m.fs.sb1.pressure_crit)
 
@@ -33,21 +33,21 @@ res = ipopt.solve(m.fs.sb1,tee=True)
 m.fs.sb1.display()
 print(f'{pyo.value(m.fs.sb1.enth_mol)=}')
 print(f'{pyo.value(m.fs.sb1.pressure_crit)=}')
-
+print(type(m.fs.sb1))
 input('paused')
 m.fs.del_component(m.fs.sb1)
 
 import pandas as pd
 
 P_list = np.linspace(100,800,20)
-f_ch4_list = np.flip(np.arange(0,105,5))
+f_ch4_list = np.flip(np.linspace(1e-8,99.9999,20))
 
 data_list=[]
 
 for P in P_list:
     for f_ch4 in f_ch4_list:
         print(f'starting run P={P} bar, F_ch4 = {f_ch4} mol/s')
-        m.fs.sb1 = m.fs.props1.build_state_block(has_phase_equilibrium=False,defined_state=True)
+        m.fs.sb1 = m.fs.props3.build_state_block(has_phase_equilibrium=False,defined_state=True)
         m.fs.sb1.test_expr = pyo.Expression(expr=m.fs.sb1.pressure-m.fs.sb1.pressure_crit)
         m.fs.sb1.pressure.fix(P*100000)
         m.fs.sb1.flow_mol_comp['co2'].fix(100-f_ch4)
