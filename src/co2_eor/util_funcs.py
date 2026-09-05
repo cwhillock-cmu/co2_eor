@@ -200,12 +200,14 @@ def export_flowsheet_to_excel(flowsheet, filename):
             pd.concat(mixer_splitter_dfs).to_excel(writer, sheet_name="MixSplits", index=True)
         flowsheet_df.to_excel(writer, sheet_name="FlowsheetData", index=True)
 
-from idaes.core.util.initialization import propagate_state
-from co2_eor.mixer_unit import Mixer as mixer
-from co2_eor.splitter_unit import Separator as splitter
-from co2_eor.wellpattern_HH import wellpattern
-from idaes.core.util.exceptions import InitializationError
+
 def custom_initialize_unit(unit):
+    from idaes.core.util.initialization import propagate_state
+    from co2_eor.mixer_unit import Mixer as mixer
+    from co2_eor.splitter_unit import Separator as splitter
+    from co2_eor.wellpattern_HH import wellpattern
+    from idaes.core.util.exceptions import InitializationError
+
     try:
         unit.initialize()
     except (ValueError, InitializationError) as e:
@@ -268,19 +270,19 @@ def split_print_wide_df(df, max_cols=4, use_display=True):
         # Add a little spacing between the output dataframes
         print("\n")
 
-from idaes.core.base.property_base import StateBlock
-from idaes.core.util.exceptions import (
-    BurntToast,
-    ConfigurationError,
-    BalanceTypeNotSupportedError,
-    InitializationError,
-)
-from idaes.core.base.control_volume_base import (
-    ControlVolumeBlockData,
-    FlowDirection,
-    MaterialBalanceType,
-)
 def add_state_material_balances(self, balance_type=None, state_1=None, state_2=None,name='state_material_balances',doc='doc'):
+    from idaes.core.base.property_base import StateBlock
+    from idaes.core.util.exceptions import (
+        BurntToast,
+        ConfigurationError,
+        BalanceTypeNotSupportedError,
+        InitializationError,
+    )
+    from idaes.core.base.control_volume_base import (
+        ControlVolumeBlockData,
+        FlowDirection,
+        MaterialBalanceType,
+    ) 
     """
     Method to add material balances linking two State Blocks in a Unit
     Model. This method is not intended to replace Control Volumes, but
@@ -315,7 +317,7 @@ def add_state_material_balances(self, balance_type=None, state_1=None, state_2=N
 
     # Check that no constraint with the same name exists
     # We will only support using this method once per Block
-    if hasattr(self, "state_material_balances"):
+    if hasattr(self, name):
         raise AttributeError(
             "{} a set of constraints named state_material_balances "
             "already exists in the current UnitModel. To avoid "
@@ -357,13 +359,9 @@ def add_state_material_balances(self, balance_type=None, state_1=None, state_2=N
             rule=state_material_balances_rule
         )
 
-        setattr(self,name,state_material_balance_eq)
-        
-
-
     elif balance_type == MaterialBalanceType.componentTotal:
         
-        def state_material_balances_rule(t, j):
+        def state_material_balances_rule(b, t, j):
             return sum(
                 state_1[t].get_material_flow_terms(p, j)
                 for p in phase_list
@@ -411,3 +409,5 @@ def add_state_material_balances(self, balance_type=None, state_1=None, state_2=N
             "argument for balance_type. This should never happen. Please "
             "contact the IDAES developers with this bug.".format(self.name)
         )
+    
+    setattr(self,name,state_material_balance_eq)

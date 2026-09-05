@@ -47,14 +47,14 @@ m.fs.props_mix_liq_cubic = GenericParameterBlock(**thermo_config.configuration_l
 
 #define default unit configurations 
 compressor_config = {
-        "property_package": m.fs.props_helmholtz,
+        "property_package": m.fs.props_mix_liq_cubic,
         "dynamic":False,
         "compressor":True,
         "thermodynamic_assumption":idaesPressureChanger.ThermodynamicAssumption.isentropic,
         }
 
 liqPipe_config = {
-        "property_package":m.fs.props_helmholtz,
+        "property_package":m.fs.props_mix_liq_cubic,
         "alpha":5,
         "ambient_temperature":293.15,
         "average_pressure_type":'linear',
@@ -70,14 +70,14 @@ mixer_config = {
         }
 
 splitter_config = {
-        "property_package":m.fs.props_helmholtz,
+        "property_package":m.fs.props_mix_liq_cubic,
         "ideal_separation":False,
         "energy_split_basis":EnergySplittingType.equal_molar_enthalpy,
         "momentum_balance_type":MomentumBalanceType.none,
         }
 
 wellpattern_config = {
-    "primary_property_package":m.fs.props_helmholtz,
+    "primary_property_package":m.fs.props_mix_liq_cubic,
     "secondary_property_package":m.fs.props_mix_vap_cubic,
     "temperature":300,
     "pressure":413*100000, #413
@@ -88,15 +88,17 @@ wellpattern_config = {
     "GB_A":0.62,
     "GB_B":1.12,
     "kovr":2.93E-14,
+    "injectivity_index":2.93e-10,
+    "reference_pressure":413*100000,
     "use_correction_factor":False,
     "depth":1000,
-    "BHP_max":650*100000, #650?
+    "pressure_max":650*100000, #650?
     "outlet_pressure":30*100000,
     "outlet_temperature":300,
 }
 
 heater_config = {
-    "property_package":m.fs.props_helmholtz,
+    "property_package":m.fs.props_mix_liq_cubic,
 }
 
 gasPipe_config = {
@@ -111,7 +113,7 @@ m.fs.pipe0 = liqPipe(**liqPipe_config,length=15000)
 m.fs.pipe0.roughness.fix(0.0475e-3)
 m.fs.pipe0.max_pressure.fix(140*100000)
 
-m.fs.mix0 = mixer(**mixer_config,property_package=m.fs.props_helmholtz,inlet_list=['from_pipe0','from_purge_splitter'])
+m.fs.mix0 = mixer(**mixer_config,property_package=m.fs.props_mix_liq_cubic,inlet_list=['from_pipe0','from_purge_splitter'])
 
 m.fs.main_comp = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.main_comp.efficiency_isentropic.fix(0.85)
@@ -147,40 +149,22 @@ m.fs.pipe4 = gasPipe(**gasPipe_config,length=3100)
 #m.fs.pipe4.diameter.fix(5)
 m.fs.pipe4.roughness.fix(0.0473e-3)
 m.fs.pipe4.max_pressure.fix(50*100000)
-"""
-m.fs.processing_facility = absorption_plant_fs(
-    property_package=m.fs.props_mix_vap_cubic,
-    solutes=['co2','ch4'],
-    henry_coefficients={
-        ('co2','A'):13.828+6.9,('co2','B'):-1720,
-        ('ch4','A'):16.531+6.9,('ch4','B'):-1720,
-    },
-)
-m.fs.processing_facility.column.num_trays.fix(10)
-m.fs.processing_facility.column.top_inlet.flow_mol_comp[0,'co2'].fix(0)
-m.fs.processing_facility.column.top_inlet.flow_mol_comp[0,'ch4'].fix(0)
-m.fs.processing_facility.column.top_inlet.flow_mol_comp[0,'selexol'].fix(1000)
-m.fs.processing_facility.column.top_inlet.pressure[0].fix(2*100000)
-m.fs.processing_facility.column.top_inlet.temperature[0].fix(310)
-"""
+
 m.fs.processing_facility=processingFacility(
-    property_package=m.fs.props_mix_vap_cubic,
+    inlet_property_package=m.fs.props_mix_vap_cubic,
+    outlet_property_package=m.fs.props_mix_vap_cubic,
+    recycle_property_package=m.fs.props_mix_liq_cubic,
     key_component='co2',
     minimum_inlet_pressure=5*100000,
-    recycle_pressure=5*100000,
-)
-
-m.fs.eos_converter = mpf_helmholtz_converter(
-    property_package_in = m.fs.props_mix_vap_cubic,
-    property_package_out = m.fs.props_helmholtz,
-    conversion_type = 'convert_all_mol'
+    recycle_pressure=80*100000,
 )
 
 m.fs.recycle_comp = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.recycle_comp.efficiency_isentropic.fix(0.85)
 
 m.fs.purge_splitter = splitter(**splitter_config,outlet_list=['to_purge','to_mix0'])
-m.fs.purge_splitter.positive_purge_eq = pyo.Constraint(expr=m.fs.purge_splitter.to_purge.flow_mol[0]>=0) #enforce material does not go into system from purge stream
+m.fs.purge_splitter.positive_purge_eq1 = pyo.Constraint(expr=m.fs.purge_splitter.to_purge.flow_mol_comp[0,'co2']>=0) #enforce material does not go into system from purge stream
+m.fs.purge_splitter.positive_purge_eq2 = pyo.Constraint(expr=m.fs.purge_splitter.to_purge.flow_mol_comp[0,'ch4']>=0)
 m.fs.purge_splitter.to_purge.pressure[0].fix(74*100000)
 
 #create streams
@@ -199,8 +183,7 @@ m.fs.s_mix1_pipe4 = Arc(source=m.fs.mix1.outlet,destination=m.fs.pipe4.inlet)
 #m.fs.s_pipe4_processing_facility = Arc(source=m.fs.pipe4.outlet,destination=m.fs.processing_facility.translator1.inlet)
 #m.fs.s_processing_facility_eos_converter = Arc(source=m.fs.processing_facility.translator2.outlet,destination=m.fs.eos_converter.inlet)
 m.fs.s_pipe4_processing_facility = Arc(source=m.fs.pipe4.outlet,destination=m.fs.processing_facility.inlet)
-m.fs.s_processing_facility_eos_converter = Arc(source=m.fs.processing_facility.recycle,destination=m.fs.eos_converter.inlet)
-m.fs.s_eos_converter_recycle_comp = Arc(source=m.fs.eos_converter.outlet,destination=m.fs.recycle_comp.inlet)
+m.fs.s_processing_facility_recycle_comp = Arc(source=m.fs.processing_facility.recycle,destination=m.fs.recycle_comp.inlet)
 m.fs.s_recycle_comp_purge_splitter = Arc(source=m.fs.recycle_comp.outlet,destination=m.fs.purge_splitter.inlet)
 m.fs.s_purge_splitter_mix0 = Arc(source=m.fs.purge_splitter.to_mix0,destination=m.fs.mix0.from_purge_splitter)
 
@@ -208,7 +191,9 @@ pyo.TransformationFactory("network.expand_arcs").apply_to(m)
 
 #fix degrees of freedom
 m.fs.pipe0.inlet.pressure[0].fix(100*100000)
-m.fs.pipe0.inlet.enth_mol[0].fix(m.fs.props_helmholtz.htpx(T=310*units.K,p=100*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE))
+m.fs.pipe0.inlet.temperature[0].fix(300)
+#m.fs.pipe0.inlet.flow_mol_comp[0,'ch4'].fix(0)
+m.fs.pipe0.test_constraint = pyo.Constraint(expr=m.fs.pipe0.inlet.flow_mol_comp[0,'ch4']==0.8*m.fs.pipe0.inlet.flow_mol_comp[0,'co2'])
 
 m.fs.main_comp.outlet.pressure[0].fix(500*100000)
 m.fs.chiller.outlet_temp_eq = pyo.Constraint(expr=m.fs.chiller.control_volume.properties_out[0].temperature==310)
@@ -231,11 +216,9 @@ m.fs.pipe4.Pdrop_constraint = pyo.Constraint(expr=m.fs.pipe4.Pdrop==6*100000)
 m.fs.mix0.outlet.pressure[0].fix(84*100000)
 m.fs.mix1.outlet.pressure[0].fix(13.5*100000)
 
-#ancillary degrees of freedom
+#ancillary degrees of freedom?
 #m.fs.split1.to_well1.pressure[0].fix(450*100000)
 #m.fs.split1.to_pipe2.pressure[0].fix(530*100000)
-#m.fs.mix0.outlet.pressure[0].fix(79*100000)
-#m.fs.mix1.outlet.pressure[0].fix(8*100000)
 
 #check degrees of freedom
 print(f'number of variables={len(list(m.component_data_objects(pyo.Var)))}')
@@ -265,7 +248,7 @@ input('paused')
 """
 
 #initialization degrees of freedom
-m.fs.pipe0.inlet.flow_mol[0].fix(40)
+m.fs.pipe0.inlet.flow_mol_comp[0,'co2'].fix(37)
 m.fs.well1.inlet.pressure[0].unfix()
 m.fs.well2.inlet.pressure[0].unfix()
 
@@ -291,10 +274,11 @@ def initialization_type1(m):
         print(f'{o[0].name}')
 
     tear_guesses = {
-        "flow_mol":{
-            (0):60,
+        "flow_mol_comp":{
+            (0,'co2'):40,
+            (0,'ch4'):20,
         },
-        "enth_mol":{0:m.fs.props_helmholtz.htpx(T=300*units.K,p=80*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE)},
+        "temperature":{0:300},
         "pressure":{0:80*100000},
     }
     seq.set_guesses_for(m.fs.mix0.outlet,tear_guesses)
@@ -307,7 +291,9 @@ def initialization_type1(m):
             unit.initialize(tee=False,display_after=False)
             return
         elif isinstance(unit,wellpattern):
-            unit.initialize(display_after=False)
+            unit.display()
+            unit.initialize(tee=True,display_after=True)
+            #input('paused')
             return
         elif unit.name == 'fs.processing_facility':
             #unit.display()
@@ -338,7 +324,7 @@ def initialization_type1(m):
 
 initialization_type1(m)
 
-m.fs.pipe0.inlet.flow_mol[0].unfix()
+m.fs.pipe0.inlet.flow_mol_comp[0,'co2'].unfix()
 m.fs.well1.inlet.pressure[0].fix(450*100000)
 m.fs.well2.inlet.pressure[0].fix(475*100000)
 

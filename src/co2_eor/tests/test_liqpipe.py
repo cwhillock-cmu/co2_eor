@@ -3,13 +3,13 @@ import idaes.core as idaescore
 import pyomo.util as pyoutil
 import contextlib
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
-from co2_eor.MPF.thermo_config import configuration_liq
+import co2_eor.MPF.thermo_config as thermo_config
 from co2_eor import liqPipe
 
 #test block
 m = pyo.ConcreteModel()
 m.fs = idaescore.FlowsheetBlock(dynamic=False)
-m.fs.props = GenericParameterBlock(**configuration_liq)
+m.fs.props = GenericParameterBlock(**thermo_config.configuration_liq_cubic)
 
 m.fs.pipe = liqPipe(
         property_package=m.fs.props,
@@ -19,7 +19,7 @@ m.fs.pipe = liqPipe(
         average_pressure_type='nonlinear',
         heat_balance_type='nonisothermal',
         average_pressure_weight=0.5,
-        average_temperature_weight=0.5,
+        average_temperature_weight=0.0,
         height_change=0,
         )
 
@@ -41,7 +41,7 @@ m.fs.pipe.inlet.flow_mol_comp[0,'ch4'].fix(1)
 print(f'DoF={idaescore.util.model_statistics.degrees_of_freedom(m)}')
 
 flowsheet_solver = pyo.SolverFactory("ipopt")
-flowsheet_solver.options['linear_solver']='ma97'
+flowsheet_solver.options['linear_solver']='ma27'
 
 m.fs.pipe.initialize(solver=flowsheet_solver,tee=True,display_after=True)
 

@@ -20,11 +20,27 @@ from idaes.core.util.initialization import propagate_state
 #config options
 def make_config_block(config):
     config.declare(
-        "property_package",
+        "inlet_property_package",
         ConfigValue(default=useDefault,domain=is_physical_parameter_block)
     )
     config.declare(
-        "has_phase_equilibrium",
+        "inlet_has_phase_equilibrium",
+        ConfigValue(default=False,domain=In([True,False]))
+    )
+    config.declare(
+        "outlet_property_package",
+        ConfigValue(default=useDefault,domain=is_physical_parameter_block)
+    )
+    config.declare(
+        "outlet_has_phase_equilibrium",
+        ConfigValue(default=False,domain=In([True,False]))
+    )
+    config.declare(
+        "recycle_property_package",
+        ConfigValue(default=useDefault,domain=is_physical_parameter_block)
+    )
+    config.declare(
+        "recycle_has_phase_equilibrium",
         ConfigValue(default=False,domain=In([True,False]))
     )
     config.declare(
@@ -61,9 +77,9 @@ def make_config_block(config):
 def make_control_volume(unit,name,config):
     unit.control_volume = pyo.Block()
 
-    unit.control_volume.properties_in = config.property_package.build_state_block(unit.flowsheet().time,defined_state=True,has_phase_equilibrium=config.has_phase_equilibrium)
-    unit.control_volume.properties_out = config.property_package.build_state_block(unit.flowsheet().time,defined_state=False,has_phase_equilibrium=config.has_phase_equilibrium)
-    unit.control_volume.properties_recycle = config.property_package.build_state_block(unit.flowsheet().time,defined_state=True,has_phase_equilibrium=config.has_phase_equilibrium)
+    unit.control_volume.properties_in = config.inlet_property_package.build_state_block(unit.flowsheet().time,defined_state=True,has_phase_equilibrium=config.inlet_has_phase_equilibrium)
+    unit.control_volume.properties_out = config.outlet_property_package.build_state_block(unit.flowsheet().time,defined_state=False,has_phase_equilibrium=config.outlet_has_phase_equilibrium)
+    unit.control_volume.properties_recycle = config.recycle_property_package.build_state_block(unit.flowsheet().time,defined_state=True,has_phase_equilibrium=config.recycle_has_phase_equilibrium)
     
 def add_params(unit,config):
     unit.key_component = config.key_component
@@ -87,9 +103,11 @@ def add_equations(unit,config):
     
     #key component recovery equations TBD FOR NOW 
     unit.key_recycle_constraint = pyo.Constraint(expr=
+        #recycle.mole_frac_comp[unit.key_component]==0.9997
         recycle.mole_frac_comp[unit.key_component]==0.9997
     )
     unit.key_outlet_constraint = pyo.Constraint(expr=
+        #outlet.mole_frac_comp[unit.key_component]==1-0.9725
         outlet.mole_frac_comp[unit.key_component]==1-0.9725
         )
     

@@ -216,14 +216,17 @@ def add_equations(unit,config):
     set_scaling_factor(unit.linear_average_pressure,1e-7)
     set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
 
+    #for now, declare an expression on teh average state block to handle liquid viscosity
+    average.visc_d_phase = pyo.Expression(["Liq"],expr=1e-4)
     #average reynolds number
     average.Re = pyo.Expression(expr=
-        #average.dens_mass*average.velocity*unit.unit.diameter/average.visc_d_phase["Liq"]
-        #average.dens_mass*average.velocity*unit.unit.diameter/average.visc_d_phase["Liq"]
+        average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
         #smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
-        average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
+        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
         #smooth_abs(average.dens_mass*average.velocity*unit.diameter/9e-5,epsilon)
+        #average.dens_mass*average.velocity*unit.diameter/(1e-4)
         )
+    
 
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
@@ -277,7 +280,7 @@ def add_equations(unit,config):
     #auxiliary constraints
 
     #single supercritical phase in pipe
-    #"""
+    """
     unit.outlet_supercritical = pyo.Constraint(
             expr=outlet.temperature_sat>=outlet.temperature_crit
             )
@@ -291,7 +294,7 @@ def add_equations(unit,config):
     set_scaling_factor(unit.inlet_supercritical,1e-2)
     set_scaling_factor(unit.outlet_supercritical,1e-2)
     set_scaling_factor(unit.average_supercritical,1e-2)
-    #"""
+    """
     unit.inlet_pressure_max = pyo.Constraint(
         expr=inlet.pressure<=unit.max_pressure
     )
@@ -307,22 +310,22 @@ def add_equations(unit,config):
     set_scaling_factor(unit.average_pressure_max,1e-7)
     #"""
     unit.inlet_pressure_min = pyo.Constraint(
-        expr=#inlet.pressure>=inlet.pressure_crit
+        expr=inlet.pressure>=inlet.pressure_crit
         #inlet.pressure_sat>=inlet.pressure_crit+1
-        inlet.pressure>=80*100000
+        #inlet.pressure>=80*100000
     )
     unit.outlet_pressure_min = pyo.Constraint(
-        expr=#outlet.pressure>=outlet.pressure_crit
+        expr=outlet.pressure>=outlet.pressure_crit
         #outlet.pressure_sat>=outlet.pressure_crit+1
-        outlet.pressure>=80*100000
+        #outlet.pressure>=80*100000
     )
     unit.average_pressure_min = pyo.Constraint(
-        expr=#average.pressure>=average.pressure_crit
-        average.pressure_sat>=average.pressure_crit+1
+        expr=average.pressure>=average.pressure_crit
+        #average.pressure_sat>=average.pressure_crit+1
     )
     #unit.inlet_pressure_min.deactivate()
     #unit.outlet_pressure_min.deactivate()
-    unit.average_pressure_min.deactivate()
+    #unit.average_pressure_min.deactivate()
     set_scaling_factor(unit.inlet_pressure_min,1e-7)
     set_scaling_factor(unit.outlet_pressure_min,1e-7)
     set_scaling_factor(unit.average_pressure_min,1e-7)
@@ -437,12 +440,18 @@ class liqPipeData(UnitModelBlockData):
 
         self.control_volume.properties_out[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
         self.control_volume.properties_avg[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
+
+    def initialize_states(self):
+        self.control_volume.properties_in.initialize()
+        self.control_volume.properties_out.initialize()
+        self.control_volume.properties_avg.initialize()
         
 
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'initializing {self.name}')
         
         self.custom_propagate_state()
+        self.initialize_states()
 
         #activate feasibility problem
         #self.activate_feasibility_problem()

@@ -22,7 +22,7 @@ m.fs.sb1.flow_mol_comp['co2'].fix(80)
 m.fs.sb1.flow_mol_comp['ch4'].fix(20)
 m.fs.sb1.pressure.fix(500*100000)
 m.fs.sb1.temperature.fix(300)
-m.fs.sb1.test_expr = pyo.Expression(expr=m.fs.sb1.pressure-m.fs.sb1.pressure_crit)
+#m.fs.sb1.test_expr = pyo.Expression(expr=m.fs.sb1.pressure-m.fs.sb1.pressure_crit)
 
 with open('temps/test_liq_props_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
@@ -32,7 +32,7 @@ m.fs.sb1.initialize(outlvl=idaeslog.DEBUG)
 res = ipopt.solve(m.fs.sb1,tee=True)
 m.fs.sb1.display()
 print(f'{pyo.value(m.fs.sb1.enth_mol)=}')
-print(f'{pyo.value(m.fs.sb1.pressure_crit)=}')
+#print(f'{pyo.value(m.fs.sb1.pressure_crit)=}')
 print(type(m.fs.sb1))
 input('paused')
 m.fs.del_component(m.fs.sb1)
@@ -61,11 +61,11 @@ for P in P_list:
             )
             assert is_optimal
             converged = True
-            pressure_crit = pyo.value(m.fs.sb1.pressure_crit)
+            #pressure_crit = pyo.value(m.fs.sb1.pressure_crit)
             enth_mol = pyo.value(m.fs.sb1.enth_mol)
         except (idaes.core.util.exceptions.InitializationError, AssertionError, ValueError) as e:
             converged = False
-            pressure_crit = None
+            #pressure_crit = None
             enth_mol = None
 
         data_list.append({
@@ -73,7 +73,7 @@ for P in P_list:
             'F_ch4':f_ch4,
             'F_co2':100-f_ch4,
             'converged':converged,
-            'Critical P':pressure_crit,
+            #'Critical P':pressure_crit,
             'Molar Enthalpy':enth_mol
             })
         m.fs.del_component(m.fs.sb1)
