@@ -20,7 +20,7 @@ surrogate_input_bounds = [
 input_bounds = {input_labels[i]: (surrogate_input_bounds[1][i],surrogate_input_bounds[0][i]) for i in range(len(input_labels))}
 
 from idaes.core.surrogate.sampling.data_utils import split_training_validation
-training_df, validation_df = split_training_validation(clean_df,0.7,seed=1)
+training_df, validation_df = split_training_validation(clean_df,0.8,seed=1)
 
 import idaes.core
 #"""
@@ -34,14 +34,15 @@ trainer.config.constant = 1
 trainer.config.linfcns = 1
 trainer.config.monomialpower = [2]
 trainer.config.multi2power = [1,2]
-#trainer.config.logfcns = 1
-#trainer.config.expfcns = 1
-#trainer.config.ratiopower = [1]
-#trainer.config.screener = 0
-#trainer.config.modeler = 5
-#trainer.config.maxtime = 10000
-#trainer.config.maxterms = [-1] * len(output_labels)
-#trainer.config.ZMIN = [0,0,0,0,0,0,0,0,0,0,-2e6,0]
+trainer.config.logfcns = 1
+trainer.config.expfcns = 1
+trainer.config.ratiopower = [1]
+trainer.config.screener = 0
+trainer.config.modeler = 5
+trainer.config.maxtime = 14400
+trainer.config.maxterms = [67] * len(output_labels)
+trainer.config.ZMIN = [0,0,0,0,0,0,0,0,0,0,0,-1e8,0,0,0,0]
+trainer.config.xfactor = [1,1,1e5,1,1e3,1,1e5,1]
 success, alm_surr, msg = trainer.train_surrogate()
 
 surrogate_expressions = trainer._results['Model']
