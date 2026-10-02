@@ -28,9 +28,9 @@ CO2_EOR copy file
 CHANGES FOR co2_eor
 used safe_log in compressor and vessel costing calcs
 used a tolerance for the power function in costing platforms and ladders
-in horizontal vessel costing, changed thickness to a pyomo object similar to how diameter is defined
+in vessel costing, changed thickness to a pyomo object similar to how diameter is defined
 added inflation multiplier
-manually changed heat exchanger pressure factor to reference "control volume" instead of "hot side" for shortcut chiller calculations
+added pressure variable input to heat exchanger costing
 swapped pressure factor calc to other equation for 3000 psig
 """
 # TODO: Missing docstrings
@@ -268,6 +268,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         material_type=HXMaterial.StainlessSteelStainlessSteel,
         tube_length=HXTubeLength.TwelveFoot,
         integer=True,
+        costing_pressure=None,
     ):
         """
         Heat exchanger costing method.
@@ -407,20 +408,28 @@ class SSLWCostingData(FlowsheetCostingBlockData):
             initialize=1, domain=pyo.NonNegativeReals, doc="Pressure design factor"
         )
 
-        try:
-            #tube_props = blk.unit_model.hot_side.properties_in[t0]
-            tube_props = blk.unit_model.control_volume.properties_in[t0]
-        except AttributeError:
-            # Assume HX1D
-            if blk.unit_model.config.flow_type == HeatExchangerFlowPattern.cocurrent:
-                inlet_x = 0
-            else:
-                inlet_x = 1
-            tube_props = blk.unit_model.tube.properties[0, inlet_x]
+        if costing_pressure is None:
+            try:
+                tube_props = blk.unit_model.hot_side.properties_in[t0]
+                costing_pressure = tube_props.pressure
+            except AttributeError:
+                try:
+                    # Assume HX1D
+                    if blk.unit_model.config.flow_type == HeatExchangerFlowPattern.cocurrent:
+                        inlet_x = 0
+                    else:
+                        inlet_x = 1
+                    tube_props = blk.unit_model.tube.properties[0, inlet_x]
+                    costing_pressure = tube_props.pressure
+                except AttributeError:
+                    raise ConfigurationError(
+                        f"Could not locate pressure to cost"
+                        "exchanger {blk.unit_model.name}"
+                    )
 
         # Pressure units must be in psig
         pressure = pyo.units.convert(
-            tube_props.pressure, to_units=pyo.units.psi
+            costing_pressure, to_units=pyo.units.psi
         ) - pyo.units.convert(1 * pyo.units.atm, to_units=pyo.units.psi)
 
         @blk.Constraint()
