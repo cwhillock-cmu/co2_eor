@@ -17,12 +17,14 @@ surrogate_input_bounds = [
     [400,200,50e5,320,2000,260,6e5,10.5],
     [100,50,10e5,290,800,220,2e5,3.5]
 ]
+
 input_bounds = {input_labels[i]: (surrogate_input_bounds[1][i],surrogate_input_bounds[0][i]) for i in range(len(input_labels))}
 
 from idaes.core.surrogate.sampling.data_utils import split_training_validation
 training_df, validation_df = split_training_validation(clean_df,0.8,seed=1)
 
 import idaes.core
+
 #"""
 trainer = idaes.core.surrogate.AlamoTrainer(
     input_labels=input_labels,
