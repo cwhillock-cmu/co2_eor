@@ -119,7 +119,7 @@ def export_flowsheet_to_excel(flowsheet, filename):
     from co2_eor.liq_pipe import liqPipe
     from co2_eor.gas_pipe import gasPipe 
     from co2_eor.processing_facility import processingFacility 
-    from co2_eor.wellpattern_HH import wellpattern 
+    from co2_eor.wellpattern_unit import wellpattern 
     from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
     from co2_eor.mixer_unit import Mixer as mixer
     from co2_eor.splitter_unit import Separator as splitter
@@ -205,7 +205,7 @@ def custom_initialize_unit(unit):
     from idaes.core.util.initialization import propagate_state
     from co2_eor.mixer_unit import Mixer as mixer
     from co2_eor.splitter_unit import Separator as splitter
-    from co2_eor.wellpattern_HH import wellpattern
+    from co2_eor.wellpattern_unit import wellpattern
     from idaes.core.util.exceptions import InitializationError
 
     try:

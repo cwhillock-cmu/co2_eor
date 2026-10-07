@@ -21,7 +21,7 @@ from co2_eor.util_funcs import export_compressor_df
 
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
 from co2_eor.liq_pipe import liqPipe
-from co2_eor.wellpattern_HH import wellpattern
+from co2_eor.wellpattern_unit import wellpattern
 from co2_eor.MPF.thermo_config import configuration_vap
 from co2_eor.gas_pipe import gasPipe
 from co2_eor.processing_facility import processingFacility
@@ -197,8 +197,8 @@ m.fs.comp2.efficiency_isentropic.fix(0.85)
 m.fs.comp2.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp2.inlet.pressure[0]>=80*100000)
 
 m.fs.well2 = wellpattern(**wellpattern_config)
-m.fs.well2.HCPV.fix(1.0)
-#m.fs.well2.HCPV.fix(0.9)
+#m.fs.well2.HCPV.fix(1.0)
+m.fs.well2.HCPV.fix(0.9)
 
 m.fs.s_split0_pipe1 = Arc(source=m.fs.split0.to_pipe1,destination=m.fs.pipe1.inlet)
 m.fs.s_pipe1_split1 = Arc(source=m.fs.pipe1.outlet,destination=m.fs.split1.inlet)
@@ -263,10 +263,10 @@ m.fs.pipe6.max_pressure.fix(650*100000)
 
 m.fs.split3 = splitter(**splitter_config,outlet_list=['to_pipe7','to_pipe8'])
 
-m.fs.pipe7 = liqPipe(**liqPipe_config,length=2400)
-#m.fs.pipe7 = liqPipe(**liqPipe_config,length=6400)
+#m.fs.pipe7 = liqPipe(**liqPipe_config,length=2400)
+m.fs.pipe7 = liqPipe(**liqPipe_config,length=6900)
 m.fs.pipe7.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
-m.fs.pipe7.diameter.fix(0.5)
+m.fs.pipe7.diameter.fix(0.9)
 m.fs.pipe7.roughness.fix(0.0475e-3)
 m.fs.pipe7.max_pressure.fix(650*100000)
 
@@ -276,8 +276,8 @@ m.fs.comp5.efficiency_isentropic.fix(0.85)
 m.fs.comp5.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp5.inlet.pressure[0]>=80*100000)
 
 m.fs.well5 = wellpattern(**wellpattern_config)
-m.fs.well5.HCPV.fix(0.9)
-#m.fs.well5.HCPV.fix(1.0)
+#m.fs.well5.HCPV.fix(0.9)
+m.fs.well5.HCPV.fix(1.0)
 
 m.fs.pipe8 = liqPipe(**liqPipe_config,length=4000)
 m.fs.pipe8.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
@@ -346,10 +346,10 @@ m.fs.pipe12.max_pressure.fix(70*100000)
 
 m.fs.mix3 = mixer(**mixer_config,property_package=m.fs.props2,inlet_list=['from_well6','from_pipe13'])
 
-m.fs.pipe13 = gasPipe(**gasPipe_config,length=5500)
-#m.fs.pipe13 = gasPipe(**gasPipe_config,length=9500)
+#m.fs.pipe13 = gasPipe(**gasPipe_config,length=5500)
+m.fs.pipe13 = gasPipe(**gasPipe_config,length=10000)
 m.fs.pipe13.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
-m.fs.pipe13.diameter.fix(0.5)
+m.fs.pipe13.diameter.fix(0.9)
 m.fs.pipe13.roughness.fix(0.0475e-3)
 m.fs.pipe13.max_pressure.fix(70*100000)
 
@@ -504,7 +504,7 @@ m.fs.recycle_comp.outlet.pressure[0].unfix()
 #    getattr(m.fs, "pipe"+str(i)).diameter.unfix()
 
 #create production target
-m.fs.prod_target = pyo.Param(mutable=True,initialize=650000) #STB/yr
+m.fs.prod_target = pyo.Param(mutable=True,initialize=450000) #STB/yr
 #production target constraint
 @m.fs.Constraint()
 def production_target_constraint(fs):
@@ -744,7 +744,7 @@ with open('temps/bakken_network_presolve_pprint.txt', 'w') as f:
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
 ipopt.options['max_iter'] = 4000
-ipopt.options['linear_solver']='ma27'
+ipopt.options['linear_solver']='ma97'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
 ipopt.options['nlp_scaling_method']='gradient-based'
@@ -789,8 +789,8 @@ m.fs.oil_price = 70
 
 from pyomo.common.errors import ApplicationError
 
-ipopt.options['max_iter'] = 500
-ipopt.options['linear_solver']='ma27'
+ipopt.options['max_iter'] = 1
+ipopt.options['linear_solver']='ma97'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
 ipopt.options['nlp_scaling_method']='gradient-based'
@@ -800,7 +800,7 @@ ipopt.options['OF_start_with_resto']='yes'
 #ipopt.options['nlp_scaling_method']='none'
 conopt.options['iterlim']=500
 
-with open('temps/bakken_sweep_backup/bakken_sweep_backup_pprint.txt', 'w') as f:
+with open('temps/bakken_sweep_final/bakken_sweep_final_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.pprint()
 
@@ -855,14 +855,14 @@ def safe_solve(m,write_directory=None):
             print(f'conopt failed with {error}')
             pass
 
-#prod_target_list1 = np.arange(50000,675000,25000)
-#prod_target_list2 = np.arange(400000,605000,5000)
+#prod_target_list1 = np.arange(100000,450000,25000)
+#prod_target_list2 = np.arange(450000,465000,15000)
 #prod_target_list_full = np.union1d(prod_target_list1, prod_target_list2)
 #prod_target_list_full = prod_target_list_full[prod_target_list_full != 485000]
-prod_target_list_full = np.arange(50000,675000,25000)
+prod_target_list_full = np.array([50000,100000,125000,150000,450000])#np.arange(540000,590000,10000)
 print(prod_target_list_full)
 
 for prod_target in np.flip(prod_target_list_full):
     m.fs.prod_target = prod_target
     #safe_solve(m,write_directory=rf'temps/bakken_sweep_final/bakken_{int(prod_target)}')
-    safe_solve(m,write_directory=rf'temps/bakken_sweep_backup/bakken_{int(prod_target)}')
+    safe_solve(m,write_directory=rf'temps/bakken_sweep_final/bakken_{int(prod_target)}')

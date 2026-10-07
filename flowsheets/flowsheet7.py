@@ -18,22 +18,17 @@ from co2_eor.splitter_unit import EnergySplittingType
 from co2_eor.mixer_unit import MomentumMixingType
 from idaes.core.util.scaling import set_scaling_factor
 
-from co2_eor.SSLW import SSLWCosting, SSLWCostingData
-from co2_eor.SSLW import CompressorType, CompressorDriveType, CompressorMaterial
-from co2_eor.SSLW import VesselMaterial
-
-from co2_eor import pipeline, mixer,splitter, wellpad, heater
-from co2_eor.util_funcs import export_compressor_df
+from co2_eor import mixer,splitter, heater
 
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
 from co2_eor.liq_pipe import liqPipe
-from co2_eor.wellpattern_HH import wellpattern
+from co2_eor.wellpattern_unit import wellpattern
 import co2_eor.MPF.thermo_config as thermo_config
 from co2_eor.gas_pipe import gasPipe
 from co2_eor.processing_facility import processingFacility
 from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
 
-from co2_eor.util_funcs import ipopt, conopt
+from co2_eor.util_funcs import ipopt
 
 m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)

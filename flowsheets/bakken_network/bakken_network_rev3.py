@@ -21,8 +21,8 @@ from co2_eor.util_funcs import export_compressor_df
 
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
 from co2_eor.liq_pipe import liqPipe
-from co2_eor.wellpattern_HH import wellpattern
-from co2_eor.MPF.thermo_config import configuration_vap
+from co2_eor.wellpattern_unit import wellpattern
+import co2_eor.MPF.thermo_config as thermo_config
 from co2_eor.gas_pipe import gasPipe
 from co2_eor.processing_facility import processingFacility
 from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
@@ -37,7 +37,7 @@ m.fs.props1 = idaesHelmholtz.HelmholtzParameterBlock(
         state_vars=idaesHelmholtz.StateVars.PH,phase_presentation=idaesHelmholtz.PhaseType.MIX,
         #has_phase_equilibrium=False,
         )
-m.fs.props2 = GenericParameterBlock(**configuration_vap)
+m.fs.props2 = GenericParameterBlock(**thermo_config.configuration_vap_cubic)
 
 m.fs.costing = SSLWCosting()
 
@@ -56,7 +56,7 @@ liqPipe_config = {
         "heat_balance_type":'nonisothermal',
         "average_pressure_weight":0.5,
         "average_temperature_weight":0.0,
-        "allowable_stress":2000*100000,
+        "allowable_stress":1380*100000,
         "height_change":0,
         }
 
@@ -139,7 +139,7 @@ m.fs.pipe0 = liqPipe(**liqPipe_config,length=15000)
 m.fs.pipe0.costing = idaes.core.UnitModelCostingBlock(**pipe_costing_config)
 m.fs.pipe0.diameter.fix(0.8)
 m.fs.pipe0.roughness.fix(0.0475e-3)
-m.fs.pipe0.max_pressure.fix(700*100000)
+m.fs.pipe0.max_pressure.fix(650*100000)
 
 m.fs.recycle_comp = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.recycle_comp.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
@@ -155,6 +155,7 @@ m.fs.chiller.outlet_temp_eq2 = pyo.Constraint(expr=m.fs.chiller.control_volume.p
 #    costing_method = SSLWCostingData.cost_heat_exchanger,
 #)
 m.fs.chiller.costing = pyo.Block()
+m.fs.chiller.control_volume.heat.setub(0)
 m.fs.chiller.costing.capital_cost = pyo.Expression(expr=1000*(m.fs.chiller.area+0.1)**0.65*1.4*3*4)
 
 m.fs.s_source_comp_pipe0 = Arc(source=m.fs.source_comp.outlet,destination=m.fs.pipe0.inlet)
@@ -173,7 +174,7 @@ m.fs.pipe1 = liqPipe(**liqPipe_config,length=800)
 m.fs.pipe1.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
 m.fs.pipe1.diameter.fix(0.5)
 m.fs.pipe1.roughness.fix(0.0475e-3)
-m.fs.pipe1.max_pressure.fix(700*100000)
+m.fs.pipe1.max_pressure.fix(650*100000)
 
 m.fs.split1 = splitter(**splitter_config,outlet_list=['to_comp1','to_pipe2'])
 
@@ -181,7 +182,6 @@ m.fs.comp1 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp1.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp1.efficiency_isentropic.fix(0.85)
 m.fs.comp1.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp1.inlet.pressure[0]>=80*100000)
-m.fs.comp1.pressure_ratio_max = pyo.Constraint(expr=m.fs.comp1.ratioP[0]<=2)
 
 m.fs.well1 = wellpattern(**wellpattern_config)
 m.fs.well1.HCPV.fix(1.1)
@@ -190,17 +190,15 @@ m.fs.pipe2 = liqPipe(**liqPipe_config,length=1600)
 m.fs.pipe2.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
 m.fs.pipe2.diameter.fix(0.5)
 m.fs.pipe2.roughness.fix(0.0475e-3)
-m.fs.pipe2.max_pressure.fix(700*100000)
+m.fs.pipe2.max_pressure.fix(650*100000)
 
 m.fs.comp2 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp2.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp2.efficiency_isentropic.fix(0.85)
 m.fs.comp2.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp2.inlet.pressure[0]>=80*100000)
-m.fs.comp2.pressure_ratio_max = pyo.Constraint(expr=m.fs.comp2.ratioP[0]<=2)
 
 m.fs.well2 = wellpattern(**wellpattern_config)
-m.fs.well2.HCPV.fix(1.0)
-#m.fs.well2.HCPV.fix(0.9)
+m.fs.well2.HCPV.fix(0.9)
 
 m.fs.s_split0_pipe1 = Arc(source=m.fs.split0.to_pipe1,destination=m.fs.pipe1.inlet)
 m.fs.s_pipe1_split1 = Arc(source=m.fs.pipe1.outlet,destination=m.fs.split1.inlet)
@@ -215,7 +213,7 @@ m.fs.pipe3 = liqPipe(**liqPipe_config,length=3200)
 m.fs.pipe3.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
 m.fs.pipe3.diameter.fix(0.5)
 m.fs.pipe3.roughness.fix(0.0475e-3)
-m.fs.pipe3.max_pressure.fix(700*100000)
+m.fs.pipe3.max_pressure.fix(650*100000)
 
 m.fs.split2 = splitter(**splitter_config,outlet_list=['to_pipe4','to_pipe5'])
 
@@ -223,13 +221,12 @@ m.fs.pipe4 = liqPipe(**liqPipe_config,length=4000)
 m.fs.pipe4.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
 m.fs.pipe4.diameter.fix(0.5)
 m.fs.pipe4.roughness.fix(0.0475e-3)
-m.fs.pipe4.max_pressure.fix(700*100000)
+m.fs.pipe4.max_pressure.fix(650*100000)
 
 m.fs.comp3 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp3.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp3.efficiency_isentropic.fix(0.85)
 m.fs.comp3.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp3.inlet.pressure[0]>=80*100000)
-m.fs.comp3.pressure_ratio_max = pyo.Constraint(expr=m.fs.comp3.ratioP[0]<=2)
 
 m.fs.well3 = wellpattern(**wellpattern_config)
 m.fs.well3.HCPV.fix(0.8)
@@ -238,13 +235,12 @@ m.fs.pipe5 = liqPipe(**liqPipe_config,length=2400)
 m.fs.pipe5.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
 m.fs.pipe5.diameter.fix(1)
 m.fs.pipe5.roughness.fix(0.0475e-3)
-m.fs.pipe5.max_pressure.fix(700*100000)
+m.fs.pipe5.max_pressure.fix(650*100000)
 
 m.fs.comp4 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp4.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp4.efficiency_isentropic.fix(0.85)
 m.fs.comp4.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp4.inlet.pressure[0]>=80*100000)
-m.fs.comp4.pressure_ratio_max = pyo.Constraint(expr=m.fs.comp4.ratioP[0]<=2)
 
 m.fs.well4 = wellpattern(**wellpattern_config)
 m.fs.well4.HCPV.fix(0.7)
@@ -263,38 +259,35 @@ m.fs.pipe6 = liqPipe(**liqPipe_config,length=3200)
 m.fs.pipe6.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
 m.fs.pipe6.diameter.fix(0.5)
 m.fs.pipe6.roughness.fix(0.0475e-3)
-m.fs.pipe6.max_pressure.fix(700*100000)
+m.fs.pipe6.max_pressure.fix(650*100000)
 
 m.fs.split3 = splitter(**splitter_config,outlet_list=['to_pipe7','to_pipe8'])
 
-m.fs.pipe7 = liqPipe(**liqPipe_config,length=2400)
-#m.fs.pipe7 = liqPipe(**liqPipe_config,length=6400)
+#m.fs.pipe7 = liqPipe(**liqPipe_config,length=2400)
+m.fs.pipe7 = liqPipe(**liqPipe_config,length=6900)
 m.fs.pipe7.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
-m.fs.pipe7.diameter.fix(0.5)
+m.fs.pipe7.diameter.fix(0.9)
 m.fs.pipe7.roughness.fix(0.0475e-3)
-m.fs.pipe7.max_pressure.fix(700*100000)
+m.fs.pipe7.max_pressure.fix(650*100000)
 
 m.fs.comp5 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp5.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp5.efficiency_isentropic.fix(0.85)
 m.fs.comp5.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp5.inlet.pressure[0]>=80*100000)
-m.fs.comp5.pressure_ratio_max = pyo.Constraint(expr=m.fs.comp5.ratioP[0]<=2)
 
 m.fs.well5 = wellpattern(**wellpattern_config)
-m.fs.well5.HCPV.fix(0.9)
-#m.fs.well5.HCPV.fix(1.0)
+m.fs.well5.HCPV.fix(1.0)
 
 m.fs.pipe8 = liqPipe(**liqPipe_config,length=4000)
 m.fs.pipe8.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
 m.fs.pipe8.diameter.fix(1)
 m.fs.pipe8.roughness.fix(0.0475e-3)
-m.fs.pipe8.max_pressure.fix(700*100000)
+m.fs.pipe8.max_pressure.fix(650*100000)
 
 m.fs.comp6 = idaesPressureChanger.PressureChanger(**compressor_config)
 m.fs.comp6.costing = idaes.core.UnitModelCostingBlock(**compressor_costing_config)
 m.fs.comp6.efficiency_isentropic.fix(0.85)
 m.fs.comp6.pressure_minimum_eq = pyo.Constraint(expr=m.fs.comp6.inlet.pressure[0]>=80*100000)
-m.fs.comp6.pressure_ratio_max = pyo.Constraint(expr=m.fs.comp6.ratioP[0]<=2)
 
 m.fs.well6 = wellpattern(**wellpattern_config)
 m.fs.well6.HCPV.fix(0.6)
@@ -352,10 +345,10 @@ m.fs.pipe12.max_pressure.fix(70*100000)
 
 m.fs.mix3 = mixer(**mixer_config,property_package=m.fs.props2,inlet_list=['from_well6','from_pipe13'])
 
-m.fs.pipe13 = gasPipe(**gasPipe_config,length=5500)
-#m.fs.pipe13 = gasPipe(**gasPipe_config,length=9500)
+#m.fs.pipe13 = gasPipe(**gasPipe_config,length=5500)
+m.fs.pipe13 = gasPipe(**gasPipe_config,length=10000)
 m.fs.pipe13.costing=idaes.core.UnitModelCostingBlock(**pipe_costing_config)
-m.fs.pipe13.diameter.fix(0.5)
+m.fs.pipe13.diameter.fix(0.9)
 m.fs.pipe13.roughness.fix(0.0475e-3)
 m.fs.pipe13.max_pressure.fix(70*100000)
 
@@ -408,14 +401,13 @@ m.fs.s_purge_splitter_recycle_comp = Arc(source=m.fs.purge_splitter.to_recycle_c
 #expand arcs
 pyo.TransformationFactory("network.expand_arcs").apply_to(m)
 
-#check degrees of freedom
-print(f'D.o.F before specifying anything={idaes.core.util.model_statistics.degrees_of_freedom(m)}')
+print(f'starting solve')
 
 #inlet specifications
 m.fs.source_comp.inlet.pressure[0].fix(100*100000)
 m.fs.source_comp.inlet.enth_mol[0].fix(m.fs.props1.htpx(T=298*units.K,p=100*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE))
 
-#initialization dof
+#fix initialization 1 dof
 
 m.fs.source_comp.outlet.pressure[0].fix(200*100000)
 m.fs.source_comp.inlet.flow_mol[0].fix(80)
@@ -503,14 +495,13 @@ initialization_type1(m)
 m.fs.source_comp.inlet.flow_mol[0].unfix()
 m.fs.source_comp.outlet.pressure[0].unfix()
 m.fs.recycle_comp.outlet.pressure[0].unfix()
-#m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
-#for i in range(1,7):
-#    getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
-#for i in range(1,15):
-#    getattr(m.fs, "pipe"+str(i)).diameter.unfix()
+m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
+for i in range(1,7):
+    getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
+m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
 
 #create production target
-m.fs.prod_target = pyo.Param(mutable=True,initialize=650000) #STB/yr
+m.fs.prod_target = pyo.Param(mutable=True,initialize=560000) #STB/yr
 #production target constraint
 @m.fs.Constraint()
 def production_target_constraint(fs):
@@ -522,10 +513,11 @@ def production_target_constraint(fs):
 
 #initialization 2
 
-#unfix initialization 2 dof
+#fix initialization 2 dof
+#m.fs.purge_splitter.split_fraction[0,'purge'].fix(1e-14)
 m.fs.source_comp.inlet.flow_mol[0].unfix()
-m.fs.source_comp.outlet.pressure[0].unfix()
-m.fs.recycle_comp.outlet.pressure[0].unfix()
+for i in range(1,7):
+    getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
 
 @m.fs.Objective()
 def flowsheet_feasibility_objective(fs):
@@ -535,6 +527,11 @@ def flowsheet_feasibility_objective(fs):
     #for i in range(1,7):
     #    expr += getattr(fs,"well"+str(i)).feasibility_expression
     return expr
+m.fs.flowsheet_feasibility_objective.deactivate()
+@m.fs.Objective()
+def test_obj(fs):
+    return fs.source_comp.inlet.flow_mol[0]
+m.fs.test_obj.deactivate()
 
 with open('temps/bakken_network_preinitialization2_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
@@ -542,31 +539,34 @@ with open('temps/bakken_network_preinitialization2_pprint.txt', 'w') as f:
 
 def initialization_type2(m):
 
-    for i in range(1,15):
-        getattr(m.fs, "pipe"+str(i)).activate_slack_variables()
+    #for i in range(1,15):
+    #    getattr(m.fs, "pipe"+str(i)).activate_slack_variables()
     #for i in range(1,7):
     #    getattr(m.fs,"well"+str(i)).activate_slack_variables()
-
+    m.fs.test_obj.activate()
     #scale model
     scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
     #solve flowsheet
     ipopt.options['acceptable_tol']=1E-4
     ipopt.options['tol']=1E-6
     ipopt.options['max_iter'] = 1000
-    ipopt.options['linear_solver']='ma97'
+    ipopt.options['OF_accept_every_trial_step'] = 'yes'
+    ipopt.options['linear_solver']='ma27'
     try: 
-        res=conopt.solve(scaled_m,tee=True)
+        res=ipopt.solve(scaled_m,tee=True)
         pass
     except ValueError:
         pass
     ipopt.options['acceptable_tol']=1E-6
     ipopt.options['tol']=1E-8
     ipopt.options['linear_solver']='ma27'
+    ipopt.options['OF_accept_every_trial_step'] = 'no'
     #unscale model
     pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
+    m.fs.test_obj.deactivate()
     #deactivate flowsheet feasibility problem
-    m.fs.flowsheet_feasibility_objective.deactivate()
+    
     for i in range(1,15):
         getattr(m.fs, "pipe"+str(i)).deactivate_feasibility_problem()
     for i in range(1,7):
@@ -579,6 +579,9 @@ initialization_type2(m)
 with open('temps/bakken_network_postinitialization2_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
+
+#unfix initialization 2 degrees of freedom
+#m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
 
 #initialization 3
 
@@ -676,24 +679,25 @@ def initialization_type3(m):
     seq.run(m,SD_solve)
     print(f'initialization 3 done')
 
-initialization_type3(m)
+#initialization_type3(m)
 
 with open('temps/bakken_network_postinitialization3_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
 
-#unfix all initialization degrees of freedom
+#unfix initialization 3 degrees of freedom
 m.fs.source_comp.inlet.flow_mol[0].unfix()
 m.fs.source_comp.outlet.pressure[0].unfix()
 m.fs.recycle_comp.outlet.pressure[0].unfix()
 m.fs.purge_splitter.split_fraction[0,'purge'].unfix()
 for i in range(1,7):
     getattr(m.fs, "comp"+str(i)).outlet.pressure[0].unfix()
+
+#unfix optimization degrees of freedom
 for i in range(0,15):
     getattr(m.fs, "pipe"+str(i)).diameter.unfix()
 
 m.fs.CW_price = pyo.Param(initialize=0.06) #$/m3
-#m.fs.CW_price = pyo.Param(initialize=0.0) #$/m3
 #create economic terms
 @m.fs.Expression()
 def opex(fs):
@@ -702,7 +706,6 @@ def opex(fs):
         electrical_power += getattr(fs,"comp"+str(i)).work_mechanical[0]
     return 365*24*3600* (5E-8*electrical_power+m.fs.CW_price*fs.chiller.q_CW) + fs.procFac.costing.opex#/3600/24/365 #+ fs.procFac.costing.capital_cost*0.16 # 
 
-#m.fs.co2_price = pyo.Param(initialize=0.05)
 m.fs.co2_price = pyo.Param(initialize=0.068)
 m.fs.raw_mats = pyo.Expression(
     expr=365*24*3600* m.fs.co2_price*m.fs.pipe0.control_volume.properties_in[0].flow_mass
@@ -726,7 +729,6 @@ def capex(fs):
     return expr
 
 m.fs.capital_recovery_factor = pyo.Param(initialize=0.1315)
-#m.fs.capital_recovery_factor = pyo.Param(initialize=0.1019)
 m.fs.obj_with_revenue = pyo.Objective(
     expr=(m.fs.capex*m.fs.capital_recovery_factor+m.fs.opex+m.fs.raw_mats-m.fs.revenue)/10000
 )
@@ -746,11 +748,21 @@ with open('temps/bakken_network_presolve_pprint.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.pprint()
 
+#check degrees of freedom
+print(f'number of variables={len(list(m.component_data_objects(pyo.Var)))}')
+print(f'number of constraints={len(list(m.component_data_objects(pyo.Constraint)))}')
+DoF = idaes.core.util.model_statistics.degrees_of_freedom(m)
+print(f'degrees of freedom={DoF}')
+#model D.o.F should be missing the purge stream outlet pressure because IDAES does not count variables not in active equality constraints
+m.fs.purge_splitter.purge.pressure[0].fix(2*100000)
+assert idaes.core.util.model_statistics.degrees_of_freedom(m) == DoF
+m.fs.purge_splitter.purge.pressure[0].unfix()
+
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
 ipopt.options['max_iter'] = 4000
-ipopt.options['linear_solver']='ma27'
+ipopt.options['linear_solver']='ma97'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
 ipopt.options['nlp_scaling_method']='gradient-based'
@@ -758,7 +770,7 @@ ipopt.options['expect_infeasible_problem']='yes'
 ipopt.options['OF_evaluate_orig_obj_at_resto_trial']='no'
 ipopt.options['OF_start_with_resto']='yes'
 #ipopt.options['OF_soft_resto_pderror_reduction_factor']=0
-res=conopt.solve(scaled_m,tee=True)
+res=ipopt.solve(scaled_m,tee=True)
 #unscale model
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
@@ -774,18 +786,25 @@ print(f'raw_mats = {pyo.value(m.fs.raw_mats)}')
 print(f'revenue = {pyo.value(m.fs.revenue)}')
 
 #visualize flowsheet
-#m.fs.visualize("bakken_network")
+m.fs.visualize("bakken_network")
 
 from co2_eor.util_funcs import export_flowsheet_to_excel
-export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve.xlsx')
+export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve3.xlsx')
 
 #pause program
-"""
+#"""
+import sys
 import readchar
-print("Press any key to continue...")
-key = readchar.readkey() 
+
+print("Press any key to continue (or 'q' to quit)...")
+key = readchar.readkey()
+
+if key.lower() == "q":
+    print("Exiting program.")
+    sys.exit()
+
 print(f"Resumed after pressing: {key}")
-"""
+#"""
 
 m.fs.obj_with_revenue.deactivate()
 m.fs.obj_no_revenue.activate()
@@ -795,7 +814,7 @@ m.fs.oil_price = 70
 
 from pyomo.common.errors import ApplicationError
 
-ipopt.options['max_iter'] = 200
+ipopt.options['max_iter'] = 1
 ipopt.options['linear_solver']='ma27'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
@@ -806,9 +825,9 @@ ipopt.options['OF_start_with_resto']='yes'
 #ipopt.options['nlp_scaling_method']='none'
 conopt.options['iterlim']=500
 
-with open('temps/bakken_sweep_backup/bakken_sweep_backup_pprint.txt', 'w') as f:
-    with contextlib.redirect_stdout(f):
-        m.pprint()
+#with open('temps/bakken_sweep_final/bakken_sweep_final_pprint.txt', 'w') as f:
+#    with contextlib.redirect_stdout(f):
+#        m.pprint()
 
 def safe_solve(m,write_directory=None):
     if write_directory == None:
@@ -861,14 +880,13 @@ def safe_solve(m,write_directory=None):
             print(f'conopt failed with {error}')
             pass
 
-#prod_target_list1 = np.arange(50000,675000,25000)
-#prod_target_list2 = np.arange(400000,605000,5000)
-#prod_target_list_full = np.union1d(prod_target_list1, prod_target_list2)
+prod_target_list1 = np.arange(50000,400000,25000)
+prod_target_list2 = np.arange(400000,425000,5000)
+prod_target_list_full = np.union1d(prod_target_list1, prod_target_list2)
 #prod_target_list_full = prod_target_list_full[prod_target_list_full != 485000]
-prod_target_list_full = np.arange(50000,675000,25000)
+#prod_target_list_full = np.flip(np.arange(485000,509000,1000))#np.arange(480000,512500,500)
 print(prod_target_list_full)
 
 for prod_target in np.flip(prod_target_list_full):
     m.fs.prod_target = prod_target
-    #safe_solve(m,write_directory=rf'temps/bakken_sweep_final/bakken_{int(prod_target)}')
-    safe_solve(m,write_directory=rf'temps/bakken_sweep_backup2/bakken_{int(prod_target)}')
+    safe_solve(m,write_directory=rf'temps/bakken_sweep_test2/bakken_{int(prod_target)}')
