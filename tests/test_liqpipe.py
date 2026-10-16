@@ -59,5 +59,5 @@ with open('temps/test_wellpatternv3_gas_pipe_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
 
-from co2_eor.util_funcs import split_print_wide_df
+from co2_eor.utility.util_funcs import split_print_wide_df
 split_print_wide_df(m.fs.pipe.export_df())

@@ -8,7 +8,7 @@ import idaes.models.properties.general_helmholtz as idaesHelmholtz
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
 import co2_eor.MPF.thermo_config as thermo_config
 import idaes.logger as idaeslog
-from co2_eor.util_funcs import ipopt
+from co2_eor.utility.util_funcs import ipopt
 
 m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)

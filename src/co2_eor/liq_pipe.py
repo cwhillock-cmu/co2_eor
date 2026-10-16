@@ -17,7 +17,8 @@ from idaes.core.util.config import is_physical_parameter_block
 from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.math import smooth_abs, safe_log
-from co2_eor.util_funcs import add_state_material_balances
+from co2_eor.utility.eq_builders import add_state_material_balances
+from pyomo.util.calc_var_value import calculate_variable_from_constraint
 
 #specify configuration options
 def make_liqPipe_config_block(config):
@@ -94,7 +95,7 @@ def add_params(unit,config):
 
 def add_variables(unit,config):
     #diameter variable
-    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,5), initialize=1, units=units.m,)
+    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,6), initialize=1, units=units.m,)
     unit.roughness = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,0.1), initialize=0.0018, units=units.m)
     unit.max_pressure = pyo.Var(domain=pyo.NonNegativeReals,bounds=(1,2000*100000),initialize=600*100000, units=units.Pa) #Pa
 
@@ -230,19 +231,19 @@ def add_equations(unit,config):
 
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
-        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
+        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re+epsilon)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
         )
     
     #hydraulic equation 7
     unit.hydraulic = pyo.Constraint(expr=
-        (inlet.pressure**2-outlet.pressure**2)/2==
-            average.pressure*average.dens_mass*average.velocity**2*unit.length/(unit.diameter*average.inverse_f*2)+
-                average.pressure*average.dens_mass*average.velocity**2*pyo.log(inlet.pressure/outlet.pressure)-
-                    (average.dens_mass*average.velocity)**2*(inlet.PD_ratio-outlet.PD_ratio)+
-                        average.pressure*average.dens_mass*unit.g*unit.height_change+
-                            unit.spos[2]-unit.sneg[2]
+        (inlet.pressure**2-outlet.pressure**2)/2*unit.diameter==
+            average.pressure*average.dens_mass*average.velocity**2*unit.length/(average.inverse_f*2)
+                +average.pressure*average.dens_mass*average.velocity**2*pyo.log(inlet.pressure/outlet.pressure)*unit.diameter
+                    -(average.dens_mass*average.velocity)**2*(inlet.PD_ratio-outlet.PD_ratio)*unit.diameter
+                        +average.pressure*average.dens_mass*unit.g*unit.height_change*unit.diameter
+                            +unit.spos[2]-unit.sneg[2]
         )
-    set_scaling_factor(unit.hydraulic,1e-6)
+    set_scaling_factor(unit.hydraulic,1e-5)
     
     #heat balance 8
     unit.isothermal_inlet = pyo.Constraint(expr=
@@ -382,10 +383,10 @@ def guess_scales(unit):
     set_scaling_factor(outlet.temperature,1e-2)
     set_scaling_factor(average.temperature,1e-2)
     set_scaling_factor(average.mw,1e2)
-    try:
-        set_scaling_factor(average.visc_d_phase["Liq"],1e6)
-    except KeyError:
-        print('skipping liquid viscosity scaling factor')
+    # try:
+    #     set_scaling_factor(average.visc_d_phase["Liq"],1e6)
+    # except KeyError:
+    #     print('skipping liquid viscosity scaling factor')
     
     set_scaling_factor(unit.spos[1],1e-1)
     set_scaling_factor(unit.sneg[1],1e-1)
@@ -436,23 +437,36 @@ class liqPipeData(UnitModelBlockData):
     def custom_propagate_state(self):
         propagate_state(source=self.inlet,destination=self.outlet)
 
-        self.control_volume.properties_avg[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure)
+        for j in self.control_volume.properties_in[0].component_list:
+            self.control_volume.properties_avg[0].flow_mol_comp[j] = pyo.value(self.control_volume.properties_in[0].flow_mol_comp[j])
+            self.control_volume.properties_out[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure) * 0.90
+        self.control_volume.properties_avg[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure) * 0.95
 
         self.control_volume.properties_out[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
         self.control_volume.properties_avg[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
+
+        self.initialize_states()
 
     def initialize_states(self):
         self.control_volume.properties_in.initialize()
         self.control_volume.properties_out.initialize()
         self.control_volume.properties_avg.initialize()
-        
 
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'initializing {self.name}')
-        
         self.custom_propagate_state()
-        self.initialize_states()
 
+        if not self.diameter.is_fixed():
+            self.control_volume.properties_in[0].velocity = 1
+            calculate_variable_from_constraint(self.diameter,self.inlet_velocity)
+            if pyo.value(self.diameter > pyo.value(self.diameter.ub)):
+                self.diameter = pyo.value(self.diameter.ub)
+            calculate_variable_from_constraint(self.control_volume.properties_out[0].velocity,self.outlet_velocity)
+            if pyo.value(self.control_volume.properties_out[0].velocity > pyo.value(self.control_volume.properties_out[0].velocity.ub)):
+                self.control_volume.properties_out[0].velocity = pyo.value(self.control_volume.properties_out[0].velocity.ub)
+
+        if hasattr(self,"costing"):
+            self.costing.initialize()
         #activate feasibility problem
         #self.activate_feasibility_problem()
         #scale model
@@ -462,7 +476,7 @@ class liqPipeData(UnitModelBlockData):
             solver.options['linear_solver']='ma27'
             solver.options['acceptable_tol']=1e-4
             solver.options['tol']=1e-6
-        res = solver.solve(scaled_self,tee=tee)
+        res = solver.solve(scaled_self,tee=False)
         #undo scaling
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
         if display_after: 

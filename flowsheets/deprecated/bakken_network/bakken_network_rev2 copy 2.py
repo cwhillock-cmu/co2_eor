@@ -17,7 +17,7 @@ from co2_eor.SSLW import CompressorType, CompressorDriveType, CompressorMaterial
 from co2_eor.SSLW import VesselMaterial
 
 from co2_eor import pipeline, mixer,splitter, wellpad, heater
-from co2_eor.util_funcs import export_compressor_df
+from co2_eor.utility.util_funcs import export_compressor_df
 
 from idaes.models.properties.modular_properties.base.generic_property import GenericParameterBlock
 from co2_eor.liq_pipe import liqPipe
@@ -27,7 +27,7 @@ from co2_eor.gas_pipe import gasPipe
 from co2_eor.processing_facility import processingFacility
 from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
 
-from co2_eor.util_funcs import ipopt, conopt
+from co2_eor.utility.util_funcs import ipopt, conopt
 
 #model, flowsheet, and parameter block
 m = pyo.ConcreteModel()
@@ -454,7 +454,7 @@ def initialization_type1(m):
     }
     seq.set_guesses_for(m.fs.chiller.inlet,tear_guesses)
 
-    from co2_eor.util_funcs import custom_initialize_unit
+    from co2_eor.utility.util_funcs import custom_initialize_unit
     def fs_custom_SD_initializer(unit):
         print(f'initializing {unit.name}')
         comp_list = []
@@ -770,7 +770,7 @@ print(f'revenue = {pyo.value(m.fs.revenue)}')
 #visualize flowsheet
 #m.fs.visualize("bakken_network")
 
-from co2_eor.util_funcs import export_flowsheet_to_excel
+from co2_eor.utility.util_funcs import export_flowsheet_to_excel
 export_flowsheet_to_excel(m.fs, 'temps/bakken_network_solve2.xlsx')
 
 #pause program

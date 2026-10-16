@@ -2,43 +2,6 @@
 import pyomo.environ as pyo
 import pandas as pd
 
-ipopt = pyo.SolverFactory('ipopt')
-ipopt.options['linear_solver']='ma27'
-ipopt.options['tol']=1E-8
-ipopt.options['acceptable_tol']=1E-6
-ipopt.options['halt_on_ampl_error']='yes'
-bonmin = pyo.SolverFactory('bonmin')
-bonmin.options['linear_solver']='ma97'
-bonmin.options['tol']=1E-8
-bonmin.options['acceptable_tol']=1E-6
-bonmin.options['halt_on_ampl_error']='yes'
-bonmin.options['bonmin.algorithm']='B-BB'
-snopt = pyo.SolverFactory('snopt')
-snopt.options['outlev']=2
-snopt.options['major_iterations_limit'] = 10000
-snopt.options['major_feasibility_tolerance']=1e-8
-minos = pyo.SolverFactory('minos')
-minos.options['outlev']=2
-conopt=pyo.SolverFactory('conopt')
-conopt.options['outlev']=3
-conopt.options['logfreq']=1
-conopt.options['hess']=0
-conopt.options['iterlim']=500
-baron = pyo.SolverFactory('baron')
-LindoGlobal = pyo.SolverFactory('lindoglobal')
-LGO = pyo.SolverFactory('LGO')
-knitro = pyo.SolverFactory('knitro')
-knitro.options['convex']=0
-knitro.options['algorithm']=6
-knitro.options['gradopt']=3
-knitro.options['hessopt']=4
-knitro.options['hessian_no_f']=0
-knitro.options['honorbnds']=1
-knitro.options['eval_fcga']=0
-knitro.options['derivcheck']=0
-knitro.options['cg_precond']=0
-knitro.options['datacheck']=1
-
 def export_compressor_df(compressor):
     """
     gets the important variables from an IDAES compressor object and returns a dataframe
@@ -107,7 +70,6 @@ def export_heater_df(heater):
         "CW flowrate (m3/s)":pyo.value(heater.q_CW),
     }
     return pd.DataFrame(data,index=[heater.name])
-
         
 def export_flowsheet_to_excel(flowsheet, filename):
     """
@@ -124,6 +86,7 @@ def export_flowsheet_to_excel(flowsheet, filename):
     from co2_eor.mixer_unit import Mixer as mixer
     from co2_eor.splitter_unit import Separator as splitter
     from co2_eor.heater_unit import Heater as heater
+    from co2_eor.surrogates.rectisol_surrogate import rectisolSurrogate
     
     liqpipe_dfs = []
     gaspipe_dfs = []
@@ -156,6 +119,10 @@ def export_flowsheet_to_excel(flowsheet, filename):
             processing_facility_dfs.append(blk.export_df())
             if hasattr(blk, "costing") and hasattr(blk.costing, "capital_cost"):
                 flowsheet_data[f"{blk_name} capex"] = pyo.value(blk.costing.capital_cost)
+        elif isinstance(blk, rectisolSurrogate):
+            processing_facility_dfs.append(blk.export_df())
+            if hasattr(blk, "costing") and hasattr(blk.costing, "total_bare_module_cost"):
+                flowsheet_data[f"{blk_name} TBMC"] = pyo.value(blk.costing.total_bare_module_cost)
         elif isinstance(blk, mpf_helmholtz_converter):
             misc_dfs.append(blk.export_df())
             if hasattr(blk, "costing") and hasattr(blk.costing, "capital_cost"):
@@ -200,36 +167,6 @@ def export_flowsheet_to_excel(flowsheet, filename):
             pd.concat(mixer_splitter_dfs).to_excel(writer, sheet_name="MixSplits", index=True)
         flowsheet_df.to_excel(writer, sheet_name="FlowsheetData", index=True)
 
-
-def custom_initialize_unit(unit):
-    from idaes.core.util.initialization import propagate_state
-    from co2_eor.mixer_unit import Mixer as mixer
-    from co2_eor.splitter_unit import Separator as splitter
-    from co2_eor.wellpattern_unit import wellpattern
-    from idaes.core.util.exceptions import InitializationError
-
-    try:
-        unit.initialize()
-    except (ValueError, InitializationError) as e:
-        #just in case, try deactivating unit feasibility problem
-        print(f'caught {e}')
-        try:
-            unit.deactivate_feasibility_problem()
-        except AttributeError:
-            print(f'caught AttributeError')
-            pass
-        if isinstance(unit,(mixer, splitter, wellpattern)):
-            #if unit is one of these, would take more effort to propagate the state, just return and hope for the best
-            #try to give it 5 iterations of ipopt
-            ipopt.options['max_iter']=5
-            ipopt.solve(unit,tee=False)
-            ipopt.options['max_iter']=3000
-            return
-        print(f'call unit.initialize() failed, propagating state')
-        #unit.display()
-        #input()
-        propagate_state(source=unit.inlet,destination=unit.outlet)
- 
 #THIS FUNCTION IS AI-GENERATED 
 from IPython.display import display 
 def split_print_wide_df(df, max_cols=4, use_display=True):
@@ -269,149 +206,3 @@ def split_print_wide_df(df, max_cols=4, use_display=True):
             
         # Add a little spacing between the output dataframes
         print("\n")
-
-def add_state_material_balances(self, balance_type=None, state_1=None, state_2=None,name='state_material_balances',doc='doc'):
-    from idaes.core.base.property_base import StateBlock
-    from idaes.core.util.exceptions import (
-        BurntToast,
-        ConfigurationError,
-        BalanceTypeNotSupportedError,
-        InitializationError,
-    )
-    from idaes.core.base.control_volume_base import (
-        ControlVolumeBlockData,
-        FlowDirection,
-        MaterialBalanceType,
-    ) 
-    """
-    Method to add material balances linking two State Blocks in a Unit
-    Model. This method is not intended to replace Control Volumes, but
-    to automate writing material balances linking isolated State Blocks
-    in those models where this is required.
-
-    Args:
-        balance_type - a MaterialBalanceType Enum indicating the type
-                        of material balances to write
-        state_1 - first State Block to be linked by balances
-        state_2 - second State Block to be linked by balances
-
-    Returns:
-        None
-
-    this method is modified to create the constraint and add it to the unit instead of using decorators.
-    allows for a custom name.
-    uses the self keyword for the unit because of convenience - not a class function.
-    """
-    # Confirm that both state blocks stem from the same parameter block
-    if not isinstance(state_1, StateBlock):
-        raise ConfigurationError(
-            "{} state_1 argument to add_state_material_balances "
-            "was not an instance of a State Block.".format(self.name)
-        )
-
-    if not isinstance(state_2, StateBlock):
-        raise ConfigurationError(
-            "{} state_2 argument to add_state_material_balances "
-            "was not an instance of a State Block.".format(self.name)
-        )
-
-    # Check that no constraint with the same name exists
-    # We will only support using this method once per Block
-    if hasattr(self, name):
-        raise AttributeError(
-            "{} a set of constraints named state_material_balances "
-            "already exists in the current UnitModel. To avoid "
-            "confusion, add_state_material_balances is only supported "
-            "once per UnitModel.".format(self.name)
-        )
-
-    # Get a representative time point for testing
-    rep_time = self.flowsheet().time.first()
-    if state_1[rep_time].params is not state_2[rep_time].params:
-        raise ConfigurationError(
-            "{} add_state_material_balances method was provided with "
-            "State Blocks are not linked to the same "
-            "instance of a Physical Parameter Block. This method "
-            "only supports linking State Blocks from the same "
-            "Physical Parameter Block.".format(self.name)
-        )
-
-    if balance_type == MaterialBalanceType.useDefault:
-        balance_type = state_1[rep_time].default_material_balance_type()
-
-    phase_list = state_1.phase_list
-    component_list = state_1.component_list
-    pc_set = state_1.phase_component_set
-
-    if balance_type == MaterialBalanceType.componentPhase:
-        # TODO : Should we include an optional phase equilibrium term here
-        # to allow for systems where a phase-transition may occur?
-        
-        def state_material_balances_rule(b, t, p, j):
-            return state_1[t].get_material_flow_terms(p, j) == state_2[
-                t
-            ].get_material_flow_terms(p, j)
-        
-        state_material_balance_eq = pyo.Constraint(
-            self.flowsheet().time,
-            pc_set,
-            doc=doc,
-            rule=state_material_balances_rule
-        )
-
-    elif balance_type == MaterialBalanceType.componentTotal:
-        
-        def state_material_balances_rule(b, t, j):
-            return sum(
-                state_1[t].get_material_flow_terms(p, j)
-                for p in phase_list
-                if (p, j) in pc_set
-            ) == sum(
-                state_2[t].get_material_flow_terms(p, j)
-                for p in phase_list
-                if (p, j) in pc_set
-            )
-    
-        state_material_balance_eq = pyo.Constraint(
-            self.flowsheet().time,
-            component_list,
-            doc=doc,
-            rule=state_material_balances_rule
-        )
-        
-
-    elif balance_type == MaterialBalanceType.total:
-
-        def state_material_balances_rule(t):
-            return sum(
-                state_1[t].get_material_flow_terms(p, j) for p, j in pc_set
-            ) == sum(state_2[t].get_material_flow_terms(p, j) for p, j in pc_set)
-        
-        state_material_balance_eq = pyo.Constraint(
-            self.flowsheet().time,
-            doc=doc,
-            rule=state_material_balances_rule
-        )
-
-    elif balance_type == MaterialBalanceType.elementTotal:
-        raise BalanceTypeNotSupportedError(
-            "{} add_state_material_balances does not support "
-            "MaterialBalanceType.elementTotal.".format(self.name)
-        )
-    elif balance_type == MaterialBalanceType.none:
-        raise BalanceTypeNotSupportedError(
-            "{} add_state_material_balances does not support "
-            "MaterialBalanceType.None.".format(self.name)
-        )
-    else:
-        raise BurntToast(
-            "{} add_state_material_balances received an unexpected "
-            "argument for balance_type. This should never happen. Please "
-            "contact the IDAES developers with this bug.".format(self.name)
-        )
-    
-    setattr(self,name,state_material_balance_eq)
-
-def add_pressure_thickness_expression(blk,pressure=None,diameter=None,allowable_stress=None):
-    pressure_thickness_expression = pyo.Expression(expr=pressure*diameter/(2*(allowable_stress-pressure)))
-    setattr(blk,"thickness",pressure_thickness_expression)

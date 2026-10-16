@@ -1653,7 +1653,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         # Total capital cost (pump + electrical motor)
         @blk.Constraint()
         def capital_cost_constraint(blk):
-            return blk.capital_cost == (blk.pump_capital_cost + blk.motor_capital_cost)
+            return blk.capital_cost == (blk.pump_capital_cost + blk.motor_capital_cost) * inflation_multiplier
 
     def cost_pressure_changer(blk, mover_type="compressor", **kwargs):
         """

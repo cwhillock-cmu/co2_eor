@@ -56,7 +56,7 @@ res=flowsheet_solver.solve(scaled_m,tee=True,logfile='ipopt_output.log')
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
 m.fs.pipe.initialize()
-from co2_eor.util_funcs import ipopt
+from co2_eor.utility.util_funcs import ipopt
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 #solve flowsheet
@@ -68,5 +68,5 @@ with open('temps/test_liqpipe2_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
 
-from co2_eor.util_funcs import split_print_wide_df
+from co2_eor.utility.util_funcs import split_print_wide_df
 split_print_wide_df(m.fs.pipe.export_df())

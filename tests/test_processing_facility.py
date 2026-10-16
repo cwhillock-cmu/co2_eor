@@ -67,7 +67,7 @@ m.fs.processing_facility.control_volume.properties_in.initialize()
 m.fs.processing_facility.initialize(display_after=False)
 m.fs.mpfConverter.initialize()
 
-from co2_eor.util_funcs import ipopt
+from co2_eor.utility.util_funcs import ipopt
 ripopt = pyo.SolverFactory('ripopt')
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
@@ -80,6 +80,6 @@ with open('temps/test_processing_facility_postsolve_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
 
-from co2_eor.util_funcs import split_print_wide_df, export_compressor_df
+from co2_eor.utility.util_funcs import split_print_wide_df, export_compressor_df
 split_print_wide_df(m.fs.processing_facility.export_df(),max_cols=4)
 split_print_wide_df(export_compressor_df(m.fs.comp1),max_cols=4)

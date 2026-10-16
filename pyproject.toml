@@ -18,6 +18,9 @@ dependencies = [
     "readchar",
     "IPython",
     "openpyxl>=3.1.5",
+    "scikit-learn>=1.9.1",
+    "cvxpy>=1.9.3",
+    "tensorflow>=2.22.0rc0",
 ]
 
 [project.optional-dependencies]

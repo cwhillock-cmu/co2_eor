@@ -28,7 +28,7 @@ from co2_eor.gas_pipe import gasPipe
 from co2_eor.processing_facility import processingFacility
 from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
 
-from co2_eor.util_funcs import ipopt
+from co2_eor.utility.util_funcs import ipopt
 
 m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)
@@ -293,7 +293,7 @@ def initialization_type1(m):
     }
     seq.set_guesses_for(m.fs.mix0.outlet,tear_guesses)
 
-    from co2_eor.util_funcs import custom_initialize_unit
+    from co2_eor.utility.util_funcs import custom_initialize_unit
     def custom_initializer_new(unit):
         #unit.display()
         if isinstance(unit,(liqPipe,gasPipe)):

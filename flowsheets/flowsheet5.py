@@ -15,7 +15,7 @@ from co2_eor.SSLW import CompressorType, CompressorDriveType, CompressorMaterial
 from co2_eor.SSLW import VesselMaterial
 
 from co2_eor import pipeline, wellpad, mixer,splitter
-from co2_eor.util_funcs import export_compressor_df
+from co2_eor.utility.util_funcs import export_compressor_df
 
 #model, flowsheet, and parameter block
 m = pyo.ConcreteModel()
@@ -284,7 +284,7 @@ order = seq.calculation_order(G)
 for o in heauristic_tear_set:
     print(o.name)
 
-from co2_eor.util_funcs import fs_initializer_function
+from co2_eor.utility.util_funcs import fs_initializer_function
 
 seq.run(m,fs_initializer_function)
 print(f'initialization done')
@@ -362,7 +362,7 @@ m.fs.obj = pyo.Objective(
     expr=(0.1*m.fs.capex+m.fs.opex+m.fs.raw_mats-m.fs.revenue)/1000000
 )
 m.fs.visualize("distribution network")
-from co2_eor.util_funcs import ipopt, conopt
+from co2_eor.utility.util_funcs import ipopt, conopt
 
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
@@ -378,5 +378,5 @@ with open('temps/flowsheet_5_postsolve_display.txt', 'w') as f:
 
 pyo.assert_optimal_termination(res)
 
-from co2_eor.util_funcs import export_flowsheet_to_excel
+from co2_eor.utility.util_funcs import export_flowsheet_to_excel
 export_flowsheet_to_excel(m.fs, 'temps/flowsheet_5_solve.xlsx')

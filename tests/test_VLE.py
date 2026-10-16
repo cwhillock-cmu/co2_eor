@@ -34,7 +34,7 @@ input('paused')
 m.fs.del_component(m.fs.sb1)
 
 import pandas as pd
-from co2_eor.util_funcs import ipopt
+from co2_eor.utility.util_funcs import ipopt
 P_list = np.linspace(20,160,15)
 f_ch4_list = np.flip(np.arange(5,100,5))
 

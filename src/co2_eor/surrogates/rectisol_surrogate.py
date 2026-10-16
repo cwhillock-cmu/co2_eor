@@ -21,7 +21,7 @@ from idaes.core.util.initialization import propagate_state
 from idaes.core.surrogate.surrogate_block import SurrogateBlock
 
 from co2_eor.SSLW import SSLWCosting, SSLWCostingData
-from co2_eor.util_funcs import add_pressure_thickness_expression
+from co2_eor.utility.eq_builders import add_pressure_thickness_expression
 
 #config options
 def make_config_block(config):
@@ -66,6 +66,10 @@ def make_config_block(config):
         ConfigValue(default=None)
     )
     config.declare(
+        "hyperplane_cuts",
+        ConfigValue(default=None,domain=list)
+    )
+    config.declare(
         "property_package_args",
         ConfigBlock(implicit=True)
     )
@@ -89,7 +93,7 @@ def add_global_params(unit,config):
 def add_global_vars(unit,config):
     unit.loop_solvent_flow = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,bounds=(0,10000),units=units.mol/units.s)
     set_scaling_factor(unit.loop_solvent_flow,1e-2)
-    unit.makeup_solvent_flow = pyo.Var(domain=pyo.Reals,initialize=1,bounds=(-0.1,10),units=units.mol/units.s)
+    unit.makeup_solvent_flow = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,bounds=(0,10),units=units.mol/units.s)
     set_scaling_factor(unit.makeup_solvent_flow,1e2)
 
 def add_units(unit,config):
@@ -119,9 +123,9 @@ def add_units(unit,config):
     unit.exchanger1.area = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,units=units.m**2)
     set_scaling_factor(unit.exchanger1.area,1e-1)
     unit.exchanger1.pressure = pyo.Expression(expr=inlet.pressure)
-    unit.exchanger1.outlet_temperature = pyo.Var(domain=pyo.NonNegativeReals,bounds=(200,300),units=units.K)
+    unit.exchanger1.outlet_temperature = pyo.Var(domain=pyo.NonNegativeReals,bounds=(200,300),initialize=260,units=units.K)
     set_scaling_factor(unit.exchanger1.outlet_temperature,1e-2)
-    unit.exchanger1.duty = pyo.Var(domain=pyo.Reals,initialize=70000,units=units.W)
+    unit.exchanger1.duty = pyo.Var(domain=pyo.NonNegativeReals,initialize=70000,units=units.W)
     set_scaling_factor(unit.exchanger1.duty,1e-4)
 
     unit.compressor2 = UnitModelBlock(dynamic=False,has_holdup=False)
@@ -129,7 +133,7 @@ def add_units(unit,config):
     unit.compressor2.config.declare('thermodynamic_assumption',ConfigValue(default=idaes.models.unit_models.pressure_changer.ThermodynamicAssumption.isentropic))
     unit.compressor2.work_mechanical = pyo.Var(unit.flowsheet().time,domain=pyo.NonNegativeReals,initialize=1000000,units=units.W)
     set_scaling_factor(unit.compressor2.work_mechanical,1e-6)
-    unit.compressor2.duty = pyo.Var(domain=pyo.Reals,initialize=-200000)
+    unit.compressor2.duty = pyo.Var(domain=pyo.Reals,bounds=(None,0),initialize=-200000)
     set_scaling_factor(unit.compressor2.duty,1e-6)
 
     unit.flash3 = UnitModelBlock(dynamic=False,has_holdup=False)
@@ -205,8 +209,6 @@ def add_equations(unit,config):
         outlet.pressure==inlet.pressure)
     set_scaling_factor(unit.top_pressure_eq,1e-6)
 
-    outlet.flow_mol_comp['co2'].lb = -config.surrogate_input_bounds[0][0]
-    outlet.flow_mol_comp['ch4'].lb = -config.surrogate_input_bounds[0][1]
     unit.co2_mass_bal = pyo.Constraint(expr=
         inlet.flow_mol_comp['co2']==outlet.flow_mol_comp['co2']+recycle.flow_mol_comp['co2'])
     unit.ch4_mass_bal = pyo.Constraint(expr=
@@ -218,20 +220,48 @@ def add_equations(unit,config):
         recycle.temperature==unit.recycle_outlet_temperature)
     set_scaling_factor(unit.outlet_temperature_eq,1e-2)
 
+    unit.recycle_pressure_eq = pyo.Constraint(expr=
+                                              recycle.pressure*recycle.flow_mol
+                                              ==recycle.flow_mol_comp['co2']*config.recycle_property_package.co2.pressure_crit
+                                              +recycle.flow_mol_comp['ch4']*config.recycle_property_package.ch4.pressure_crit)
+    set_scaling_factor(unit.recycle_pressure_eq,1e-6)
+
+    outlet.flow_mol_comp['co2'].lb = 0#-config.surrogate_input_bounds[0][0]
+    outlet.flow_mol_comp['ch4'].lb = 0#-config.surrogate_input_bounds[0][1]
+
+
 def build_surrogate(unit,config):
     inlet = unit.control_volume.properties_in[0]
     outlet = unit.control_volume.properties_out[0]
     recycle = unit.control_volume.properties_recycle[0]
 
     inputs = [inlet.flow_mol_comp['co2'],inlet.flow_mol_comp['ch4'],inlet.pressure,inlet.temperature,unit.loop_solvent_flow,unit.exchanger1.outlet_temperature,unit.flash3.pressure,unit.column.Nstages]
-    outputs = [recycle.flow_mol_comp['co2'],recycle.flow_mol_comp['ch4'],recycle.pressure,#recycle.temperature,
+    outputs = [recycle.flow_mol_comp['co2'],recycle.flow_mol_comp['ch4'],#recycle.pressure,#recycle.temperature,
                outlet.temperature,
                unit.column.diameter,unit.exchanger1.area,unit.exchanger1.duty,unit.pump1.control_volume.properties_in[0].flow_vol,
                unit.pump1.work_mechanical,unit.compressor1.work_mechanical,unit.compressor2.work_mechanical,unit.compressor2.duty,
                unit.flash1.flow_vol,unit.flash2.flow_vol,unit.flash3.flow_vol,unit.makeup_solvent_flow]
 
     unit.surrogate = SurrogateBlock()
-    unit.surrogate.build_model(config.surrogate_object,input_vars=inputs,output_vars=outputs)
+    unit.surrogate.build_model(config.surrogate_object,input_vars=inputs,output_vars=outputs,use_surrogate_bounds=False)
+
+    #build inlet bound constraints
+    unit.input_min_cons = pyo.ConstraintList()
+    for i,var in enumerate(inputs):
+        unit.input_min_cons.add(expr=var>=config.surrogate_input_bounds[1][i])
+        set_scaling_factor(unit.input_min_cons[i+1],1/config.surrogate_input_bounds[1][i])
+    unit.input_max_cons = pyo.ConstraintList()
+    for i,var in enumerate(inputs):
+        unit.input_max_cons.add(expr=var<=config.surrogate_input_bounds[0][i])
+        set_scaling_factor(unit.input_max_cons[i+1],1/config.surrogate_input_bounds[0][i])
+
+    if config.hyperplane_cuts is not None:
+        unit.hyperplane_cuts = pyo.ConstraintList()
+        for hp_dict in config.hyperplane_cuts:
+            lhs = hp_dict["bias"]
+            for i,var in enumerate(inputs):
+                lhs += hp_dict["weights"][i]*var
+            unit.hyperplane_cuts.add(expr=lhs<=0)
 
 def build_costing_model(unit):
     unit.costing = SSLWCosting()
@@ -339,10 +369,31 @@ def build_costing_model(unit):
         }
     )
 
-    #TODO:implement opex
+    bm_factors = {
+        "ST_exchanger":3.17,
+        "vertical_vessel":4.16,
+        "horizontal_vessel":3.05,
+        "pump":3.3,
+        "compressor":2.15,
+    }
+
+    unit.costing.total_bare_module_cost = pyo.Expression(expr=
+                                                         unit.column.costing.capital_cost * bm_factors['vertical_vessel']
+                                                         + unit.exchanger1.costing.capital_cost * bm_factors["ST_exchanger"]
+                                                         + unit.pump1.costing.capital_cost * bm_factors["pump"]
+                                                         + (unit.compressor1.costing.capital_cost + unit.compressor2.costing.capital_cost) * bm_factors["compressor"]
+                                                         + (unit.flash1.costing.capital_cost + unit.flash2.costing.capital_cost + unit.flash3.costing.capital_cost) * bm_factors["horizontal_vessel"]
+    )
+    set_scaling_factor(unit.costing.total_bare_module_cost,1e-7)
+
+    unit.costing.refrigeration_duty = pyo.Expression(expr=unit.exchanger1.duty)
+    unit.costing.electrical_power = pyo.Expression(expr=
+                                                   unit.pump1.work_mechanical[0]
+                                                   +unit.compressor1.work_mechanical[0]
+                                                   +unit.compressor2.work_mechanical[0])
 
 #define processing facility class
-@declare_process_block_class("processingFacility")
+@declare_process_block_class("rectisolSurrogate")
 class processingFacilityData(UnitModelBlockData):
     CONFIG = UnitModelBlockData.CONFIG()
     make_config_block(CONFIG)
@@ -361,6 +412,11 @@ class processingFacilityData(UnitModelBlockData):
         self.add_port(block=self.control_volume.properties_recycle,name="recycle")
         build_costing_model(self)
 
+    def initialize_states(self):
+        self.control_volume.properties_in.initialize()
+        self.control_volume.properties_out.initialize()
+        self.control_volume.properties_recycle.initialize()
+
     def custom_propagate_state(self):
         self.control_volume.properties_recycle[0].pressure.value = 74e5
         self.control_volume.properties_recycle[0].temperature.value = pyo.value(self.recycle_outlet_temperature)
@@ -369,13 +425,27 @@ class processingFacilityData(UnitModelBlockData):
 
         for j in self.control_volume.properties_in.component_list:
             if j != 'co2':
-                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value
-                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = 0
+                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.9
+                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.1
             else:
-                self.control_volume.properties_out[0].flow_mol_comp[j].value = 0
-                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value
+                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.5
+                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.5
 
-    def initialize(self,solver=None,tee=False,display_after=False):
+        self.initialize_states()
+
+    def deactivate_surrogate_input_bounds(self):
+        self.input_min_cons.deactivate()
+        self.input_max_cons.deactivate()
+
+    def activate_surrogate_input_bounds(self):
+        self.input_min_cons.activate()
+        self.input_max_cons.activate()
+
+    def set_surrogate_input_lbs(self):
+        pass
+        #TODO: MAKE THIS FUNCTION
+
+    def initialize(self,solver=None,tee=True,display_after=False):
         print(f'initializing {self.name}')
         self.custom_propagate_state()
 
@@ -384,6 +454,7 @@ class processingFacilityData(UnitModelBlockData):
         if solver==None:
             solver = pyo.SolverFactory('ipopt')
             solver.options['linear_solver']='ma27'
+            solver.options['acceptable_tol']=1e-3
             solver.options['tol']=1e-6
         res = solver.solve(scaled_self,tee=tee)
         #undo scaling
@@ -403,10 +474,8 @@ class processingFacilityData(UnitModelBlockData):
             self.custom_propagate_state()
         return res
     
-    def export_df(self,t=0): #TODO:fix this function
+    def export_df(self,t=0):
         data = {
-            "key component":pyo.value(self.key_component),
-            "minimum inlet pressure (bar)":pyo.value(self.minimum_inlet_pressure)/100000,
         }
         for state,statename in zip([self.control_volume.properties_in[t],self.control_volume.properties_out[t],self.control_volume.properties_recycle[t]],['inlet','outlet','recycle']):
             data.update({f'{statename} total flowrate (kg/s)':pyo.value(state.flow_mass)})
@@ -417,4 +486,19 @@ class processingFacilityData(UnitModelBlockData):
             data.update({f'{statename} pressure (bar)':pyo.value(state.pressure)/100000})
             data.update({f'{statename} density (kg/m3)':pyo.value(state.dens_mass)})
 
+        data.update({f'Loop Solvent Flow (mol/s)':pyo.value(self.loop_solvent_flow)})
+        data.update({f'HX1 Outlet Temperature (K)':pyo.value(self.exchanger1.outlet_temperature)})
+        data.update({f'Flash3 Pressure (bar)':pyo.value(self.flash3.pressure)/100000})
+        data.update({f'Column Diameter (m)':pyo.value(self.column.diameter)})
+        data.update({f'HX1 area (m2)':pyo.value(self.exchanger1.area)})
+        data.update({f'HX1 Duty (W)':pyo.value(self.exchanger1.duty)})
+        data.update({f'Pump 1 Volflow (m3/s)':pyo.value(self.pump1.control_volume.properties_in[0].flow_vol)})
+        data.update({f'Pump 1 Work (W)':pyo.value(self.pump1.work_mechanical[0])})
+        data.update({f'Compressor 1 Work (W)':pyo.value(self.compressor1.work_mechanical[0])})
+        data.update({f'Compressor 2 Work (W)':pyo.value(self.compressor2.work_mechanical[0])})
+        data.update({f'Compressor 2 Duty (W)':pyo.value(self.compressor2.duty)})
+        data.update({f'Flash 1 Volflow (m3/s)':pyo.value(self.flash1.flow_vol)})
+        data.update({f'Flash 2 Volflow (m3/s)':pyo.value(self.flash2.flow_vol)})
+        data.update({f'Flash 3 Volflow (m3/s)':pyo.value(self.flash3.flow_vol)})
+        data.update({f'Makeup Solvent (mol/s)':pyo.value(self.makeup_solvent_flow)})
         return pd.DataFrame(data,index=[self.name])

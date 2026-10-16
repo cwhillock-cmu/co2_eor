@@ -16,6 +16,7 @@ from idaes.core.util.config import is_physical_parameter_block
 from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.math import smooth_abs, safe_log
+from pyomo.util.calc_var_value import calculate_variable_from_constraint
 
 #config options
 def make_config_block(config):
@@ -65,7 +66,7 @@ def add_params(unit,config):
     unit.allowable_stress = pyo.Param(initialize=config.allowable_stress, units=units.Pa) #Pa
 
 def add_variables(unit,config):
-    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,5), initialize=1, units=units.m,)
+    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,10), initialize=1, units=units.m,)
     unit.roughness = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,0.1), initialize=0.0018, units=units.m)
     unit.max_pressure = pyo.Var(domain=pyo.NonNegativeReals,bounds=(1,2000*100000),initialize=600*100000, units=units.Pa) #Pa
 
@@ -90,8 +91,8 @@ def add_equations(unit,config):
 
     #create velocity variables
     #inlet velocity 
-    inlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0,bounds=(0,10), units=units.m/units.s)
-    outlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0,bounds=(0,10), units=units.m/units.s)
+    inlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0,bounds=(0,20), units=units.m/units.s)
+    outlet.velocity = pyo.Var(domain=pyo.NonNegativeReals,initialize=0,bounds=(0,20), units=units.m/units.s)
 
     #mass balance 1
     unit.control_volume.add_phase_component_balances(has_phase_equilibrium=config.has_phase_equilibrium)
@@ -230,7 +231,7 @@ def guess_scales(unit):
     set_scaling_factor(unit.constant_average_pressure,1e-7)
     set_scaling_factor(unit.linear_average_pressure,1e-7)
     set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
-    set_scaling_factor(unit.GFE,1e-1)
+    set_scaling_factor(unit.GFE,1e-2)
     
     #auxiliary constraint scaling factors
     set_scaling_factor(unit.inlet_pressure_max,1e-7)
@@ -275,6 +276,11 @@ class gasPipeData(UnitModelBlockData):
         self.deactivate_slack_variables()
         self.feasibility_objective.deactivate()
 
+    def initialize_states(self):
+        self.control_volume.properties_in.initialize()
+        self.control_volume.properties_out.initialize()
+        self.control_volume.properties_avg.initialize()
+
     def custom_propagate_state(self):
         propagate_state(source=self.inlet,destination=self.outlet)
 
@@ -283,20 +289,36 @@ class gasPipeData(UnitModelBlockData):
         self.outlet.temperature[0].value = pyo.value(self.control_volume.properties_in[0].temperature)
         self.control_volume.properties_avg[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
 
+        self.initialize_states()
+
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'start initialize function {self.name}')
         self.custom_propagate_state()
+
+        if not self.diameter.is_fixed():
+            self.control_volume.properties_in[0].velocity = 1
+            calculate_variable_from_constraint(self.diameter,self.inlet_velocity)
+            if pyo.value(self.diameter > pyo.value(self.diameter.ub)):
+                self.diameter = pyo.value(self.diameter.ub)
+            calculate_variable_from_constraint(self.control_volume.properties_out[0].velocity,self.outlet_velocity)
+            if pyo.value(self.control_volume.properties_out[0].velocity > pyo.value(self.control_volume.properties_out[0].velocity.ub)):
+                self.control_volume.properties_out[0].velocity = pyo.value(self.control_volume.properties_out[0].velocity.ub)
+        if hasattr(self,"costing"):
+            self.costing.initialize()
         #activate feasibility problem
         #self.activate_feasibility_problem()
         #scale model
+        set_scaling_factor(self.GFE,1e-4)
         scaled_self = pyo.TransformationFactory('core.scale_model').create_using(self)
         if solver==None:
             solver = pyo.SolverFactory('ipopt')
             solver.options['linear_solver']='ma27'
+            solver.options['acceptable_tol']=1e-4
             solver.options['tol']=1e-6
         res = solver.solve(scaled_self,tee=tee)
         #undo scaling
         pyo.TransformationFactory('core.scale_model').propagate_solution(scaled_self,self)
+        set_scaling_factor(self.GFE,1e-2)
         if display_after: 
             self.display()
         if res.solver.termination_condition == pyo.TerminationCondition.optimal:

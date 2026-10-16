@@ -15,7 +15,7 @@ from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.math import smooth_max
 from idaes.core.util.initialization import propagate_state
-from co2_eor.util_funcs import add_state_material_balances
+from co2_eor.utility.eq_builders import add_state_material_balances
 """
 well pattern injection model
 pure co2 injection

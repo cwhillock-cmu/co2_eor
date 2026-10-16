@@ -15,7 +15,7 @@ from co2_eor.SSLW import CompressorType, CompressorDriveType, CompressorMaterial
 from co2_eor.SSLW import VesselMaterial
 
 from co2_eor import pipeline, wellpad, mixer,splitter
-from co2_eor.util_funcs import export_compressor_df
+from co2_eor.utility.util_funcs import export_compressor_df
 
 #model, flowsheet, and parameter block
 m = pyo.ConcreteModel()
@@ -355,7 +355,7 @@ m.fs.total_oil_prod_constraint = pyo.Constraint(
     expr=m.fs.prod_target/365/24/3600 == m.fs.well1.q_OIL_PROD+m.fs.well2.q_OIL_PROD+m.fs.well3.q_OIL_PROD+m.fs.well4.q_OIL_PROD+m.fs.well5.q_OIL_PROD+m.fs.well6.q_OIL_PROD+m.fs.well7.q_OIL_PROD
 )
 
-from co2_eor.util_funcs import ipopt, conopt, export_flowsheet_to_excel
+from co2_eor.utility.util_funcs import ipopt, conopt, export_flowsheet_to_excel
 import numpy as np
 prod_targets = np.linspace(300000,1300000,10)
 
