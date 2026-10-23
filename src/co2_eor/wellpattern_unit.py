@@ -21,8 +21,7 @@ well pattern injection model
 pure co2 injection
 output is a gas mixture of co2, and currently only ch4
 unforunately need to hardcode in the assumption about what equation of states are being used
-inlet port uses the helmholtz equation of state 
-outlet port uses the modular properties framework
+assume both ports use MPF eos
 both eos with amount basis mass
 """
 
@@ -225,17 +224,22 @@ def add_equations(unit,name,config):
     set_scaling_factor(unit.material_balance,1e-1)
 
     #for now, declare an expression on the average state block to handle liquid viscosity
-    reservoir_state.visc_d_phase = pyo.Expression(["Liq"],expr=1e-4)
+    try:
+        pyo.value(reservoir_state.visc_d_phase["Liq"])
+    except AttributeError:
+        reservoir_state.visc_d_phase = pyo.Expression(["Liq"],expr=1e-4)
 
     #use smooth max so that well pattern can be "turned off" and not get negative flow
     unit.darcys_law = pyo.Constraint(
         expr=inlet.flow_vol==
                 #unit.kovr/reservoir_state.visc_d_phase["Liq"]*smooth_max(injection_state.pressure-reservoir_state.pressure,0,epsilon)
                     #+ unit.spos[1]-unit.sneg[1]
-                unit.injectivity_index*smooth_max(inlet.pressure-unit.reference_pressure,0,epsilon)*unit.multiplier
-                    + unit.spos[1]-unit.sneg[1]
+                # unit.injectivity_index*smooth_max(inlet.pressure-unit.reference_pressure,0,epsilon)*unit.multiplier
+                #     + unit.spos[1]-unit.sneg[1]
+                unit.injectivity_index*(inlet.pressure-unit.reference_pressure)*unit.multiplier
+                   + unit.spos[1]-unit.sneg[1]  
     )
-    set_scaling_factor(unit.darcys_law,1e3)
+    set_scaling_factor(unit.darcys_law,1e2)
 
     #sensitivity curve correction factor
     if config.use_correction_factor:
@@ -294,7 +298,8 @@ def add_equations(unit,name,config):
     unit.min_pressure_constraint = pyo.Constraint(
             expr=inlet.pressure>=unit.reference_pressure
             )
-    unit.min_pressure_constraint.deactivate()
+    inlet.pressure.lb = pyo.value(unit.reference_pressure)
+    #unit.min_pressure_constraint.deactivate()
     set_scaling_factor(unit.min_pressure_constraint,1e-7)
     set_scaling_factor(unit.max_pressure_constraint,1e-7)
 

@@ -112,7 +112,6 @@ gasPipe_config = {
 
 surrogate_input_bounds = [
     [400,200,50e5,320,2000,260,6e5,10.5],
-    #[100,50,10e5,290,800,220,2e5,3.5]
     [100,50,10e5,290,800,220,2e5,3.5]
 ]
 hyperplane_list = [
@@ -203,7 +202,7 @@ m.fs.pipe1 = liqPipe(**liqPipe_config,length=3000)
 m.fs.pipe1.diameter = 1
 m.fs.pipe1.roughness.fix(0.0475e-3)
 m.fs.pipe1.max_pressure.fix(650*100000)
-m.fs.pipe1.costing = idaes.core.UnitModelCostingBlock(**liqpipe_costing_config)
+#m.fs.pipe1.costing = idaes.core.UnitModelCostingBlock(**liqpipe_costing_config)
 
 m.fs.split1 = splitter(**splitter_config,outlet_list=['to_well1','to_pipe2'])
 
@@ -215,7 +214,7 @@ m.fs.pipe2 = liqPipe(**liqPipe_config,length=2200)
 m.fs.pipe2.diameter = 1
 m.fs.pipe2.roughness.fix(0.0475e-3)
 m.fs.pipe2.max_pressure.fix(650*100000)
-m.fs.pipe2.costing = idaes.core.UnitModelCostingBlock(**liqpipe_costing_config)
+##m.fs.pipe2.costing = idaes.core.UnitModelCostingBlock(**liqpipe_costing_config)
 
 m.fs.well2 = wellpattern(**wellpattern_config)
 m.fs.well2.HCPV.fix(0.9)
@@ -383,7 +382,7 @@ def initialization_type1(m):
     seq = SequentialDecomposition()
     seq.options.select_tear_method = "heuristic"
     seq.options.tear_method = "Wegstein"
-    seq.options.iterLim = 15
+    seq.options.iterLim = 30
 
     G = seq.create_graph(m)
     heauristic_tear_set = seq.tear_set_arcs(G,method="heuristic")
@@ -508,50 +507,6 @@ m.fs.main_comp.outlet.pressure[0].fix(500*100000)
 m.fs.well1.inlet.pressure[0].fix(450*100000)
 m.fs.well2.inlet.pressure[0].fix(475*100000)
 
-def initialization_2(m):
-    m.fs.well1.inlet.pressure[0].fix(450*100000)
-    m.fs.well1.inlet.enth_mol[0].fix(m.fs.props_helmholtz.htpx(T=310*units.K,p=450*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE))
-
-    m.fs.well2.inlet.pressure[0].fix(550*100000)
-    m.fs.well2.inlet.enth_mol[0].fix(m.fs.props_helmholtz.htpx(T=310*units.K,p=550*100000*units.Pa,amount_basis=idaesHelmholtz.AmountBasis.MOLE))
-    
-    from pyomo.network import SequentialDecomposition
-    seq = SequentialDecomposition()
-    G = seq.create_graph(m)
-    custom_order = [
-        [m.fs.well1],
-        [m.fs.well2],
-        [m.fs.pipe3],
-        [m.fs.mix1],
-        [m.fs.pipe4],
-        [m.fs.processing_facility],
-        [m.fs.eos_converter],
-        [m.fs.recycle_comp],
-        [m.fs.purge_splitter]
-    ]
-    def custom_initializer_new(unit):
-        if isinstance(unit,(liqPipe,gasPipe)):
-            #unit.display()
-            unit.initialize(tee=False)
-            return
-        if isinstance(unit,wellpattern):
-            unit.initialize(display_after=False)
-            return
-        if unit.name == 'fs.processing_facility.column':
-            unit.initialize()
-            return
-        if isinstance(unit,mixer):
-            ipopt.options['max_iter']=10
-            ipopt.solve(unit)
-            ipopt.options['max_iter']=3000
-        else:
-            unit.initialize()
-            return
-
-    seq.run_order(G,order=custom_order,function=custom_initializer_new)
-
-#initialization_2(m)
-
 #m.fs.pipe0.test_constraint.deactivate()
 #m.fs.pipe0.inlet.flow_mol_comp[0,'ch4'].unfix()
 #m.obj = pyo.Objective(expr=m.fs.pipe0.inlet.flow_mol_comp[0,'ch4'])
@@ -608,11 +563,11 @@ m.fs.pipe3.Pdrop_constraint.deactivate()
 m.fs.pipe4.Pdrop_constraint.deactivate()
 m.fs.mix0.outlet.pressure[0].unfix()
 m.fs.mix1.outlet.pressure[0].unfix()
-m.fs.test_constraint2 = pyo.Constraint(expr=m.fs.mix1.outlet.pressure[0]<=12*100000)
-set_scaling_factor(m.fs.test_constraint2,1e-6)
+#m.fs.test_constraint2 = pyo.Constraint(expr=m.fs.mix1.outlet.pressure[0]<=12*100000)
+#set_scaling_factor(m.fs.test_constraint2,1e-6)
 
 ipopt.options['max_iter'] = 6000
-ipopt.options['linear_solver']='ma27'
+ipopt.options['linear_solver']='ma97'
 ipopt.options['acceptable_tol']=1E-6
 ipopt.options['tol']=1E-8
 ipopt.options['nlp_scaling_method']='gradient-based'

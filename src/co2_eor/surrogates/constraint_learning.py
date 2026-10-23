@@ -346,7 +346,7 @@ if __name__ == "__main__":
         return df[keep].copy()
 
     df2 = filter_by_hyperplane(df,pipeline,input_features,1)
-    df2[input_features].to_excel("temps/LHS_data1_cut.xlsx",index=False)
+    df2.to_excel("temps/LHS_data1_cut.xlsx",index=False)
 
     model2, pipeline2 = learn_separating_hyperplane(
         df=df2, feature_cols=input_features, target_col=target,scaler_type="standard",class_weight=None

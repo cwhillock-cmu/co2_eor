@@ -81,7 +81,8 @@ def export_flowsheet_to_excel(flowsheet, filename):
     from co2_eor.liq_pipe import liqPipe
     from co2_eor.gas_pipe import gasPipe 
     from co2_eor.processing_facility import processingFacility 
-    from co2_eor.wellpattern_unit import wellpattern 
+    from co2_eor.wellpattern_unit import wellpattern
+    from co2_eor.wellpattern_unit_HH import wellpattern_HH
     from co2_eor.mpf_to_helmholtz import mpf_helmholtz_converter
     from co2_eor.mixer_unit import Mixer as mixer
     from co2_eor.splitter_unit import Separator as splitter
@@ -107,7 +108,7 @@ def export_flowsheet_to_excel(flowsheet, filename):
             gaspipe_dfs.append(blk.export_df())
             if hasattr(blk, "costing") and hasattr(blk.costing, "capital_cost"):
                 flowsheet_data[f"{blk_name} capex"] = pyo.value(blk.costing.capital_cost)
-        elif isinstance(blk, wellpattern):
+        elif isinstance(blk, (wellpattern,wellpattern_HH)):
             well_dfs.append(blk.export_df())
             if hasattr(blk, "costing") and hasattr(blk.costing, "capital_cost"):
                 flowsheet_data[f"{blk_name} capex"] = pyo.value(blk.costing.capital_cost)
@@ -115,14 +116,10 @@ def export_flowsheet_to_excel(flowsheet, filename):
             comp_dfs.append(export_compressor_df(blk))
             if hasattr(blk, "costing") and hasattr(blk.costing, "capital_cost"):
                 flowsheet_data[f"{blk_name} capex"] = pyo.value(blk.costing.capital_cost)
-        elif isinstance(blk, processingFacility):
+        elif isinstance(blk, (processingFacility,rectisolSurrogate)):
             processing_facility_dfs.append(blk.export_df())
             if hasattr(blk, "costing") and hasattr(blk.costing, "capital_cost"):
                 flowsheet_data[f"{blk_name} capex"] = pyo.value(blk.costing.capital_cost)
-        elif isinstance(blk, rectisolSurrogate):
-            processing_facility_dfs.append(blk.export_df())
-            if hasattr(blk, "costing") and hasattr(blk.costing, "total_bare_module_cost"):
-                flowsheet_data[f"{blk_name} TBMC"] = pyo.value(blk.costing.total_bare_module_cost)
         elif isinstance(blk, mpf_helmholtz_converter):
             misc_dfs.append(blk.export_df())
             if hasattr(blk, "costing") and hasattr(blk.costing, "capital_cost"):
@@ -206,3 +203,31 @@ def split_print_wide_df(df, max_cols=4, use_display=True):
             
         # Add a little spacing between the output dataframes
         print("\n")
+
+import logging
+from pyomo.util.infeasible import log_infeasible_constraints
+
+def report_infeasibilities(model, filename):
+    """
+    Directs Pyomo's log_infeasible_constraints output to a specified file.
+    Cleans up handlers afterward to allow sequential runs with different filenames.
+    """
+    # 1. Grab the specific logger used by Pyomo
+    logger = logging.getLogger('pyomo.util.infeasible')
+    logger.setLevel(logging.INFO)
+    
+    # 2. Prevent duplicate logs from printing to the console/terminal
+    logger.propagate = False
+    
+    # 3. Create a clean file handler for your specific filename
+    file_handler = logging.FileHandler(filename, mode='w')
+    file_handler.setFormatter(logging.Formatter('%(message)s'))  # Strips log level prefixes for a cleaner text report
+    logger.addHandler(file_handler)
+    
+    # 4. Trigger Pyomo's built-in evaluator to write to the file
+    print(f"Analyzing infeasibilities and saving to: {filename}...")
+    log_infeasible_constraints(model)
+    
+    # 5. Explicitly detach and close the file handler so the file isn't locked
+    logger.removeHandler(file_handler)
+    file_handler.close()

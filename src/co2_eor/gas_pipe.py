@@ -66,7 +66,7 @@ def add_params(unit,config):
     unit.allowable_stress = pyo.Param(initialize=config.allowable_stress, units=units.Pa) #Pa
 
 def add_variables(unit,config):
-    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,10), initialize=1, units=units.m,)
+    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,2), initialize=1, units=units.m,)
     unit.roughness = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,0.1), initialize=0.0018, units=units.m)
     unit.max_pressure = pyo.Var(domain=pyo.NonNegativeReals,bounds=(1,2000*100000),initialize=600*100000, units=units.Pa) #Pa
 
@@ -96,10 +96,12 @@ def add_equations(unit,config):
 
     #mass balance 1
     unit.control_volume.add_phase_component_balances(has_phase_equilibrium=config.has_phase_equilibrium)
+    set_scaling_factor(unit.control_volume.material_balances,1e-2)
 
     #mass balance 2
     unit.add_state_material_balances(balance_type=idaes.core.MaterialBalanceType.componentPhase,state_1=unit.control_volume.properties_in,state_2=unit.control_volume.properties_avg)
-    
+    set_scaling_factor(unit.state_material_balances,1e-2)
+
     #inlet velocity 3
     unit.inlet_velocity = pyo.Constraint(expr=
         inlet.velocity*unit.area*inlet.dens_mass==inlet.flow_mass
@@ -119,6 +121,7 @@ def add_equations(unit,config):
     unit.average_temperature = pyo.Constraint(expr=
         average.temperature*2==inlet.temperature+outlet.temperature
         )
+    set_scaling_factor(unit.average_temperature,1e-2)
         
     #average pressure 6
     unit.constant_average_pressure = pyo.Constraint(expr=
@@ -139,10 +142,14 @@ def add_equations(unit,config):
         unit.constant_average_pressure.activate()
     else:
         unit.linear_average_pressure.activate()
+    set_scaling_factor(unit.constant_average_pressure,1e-7)
+    set_scaling_factor(unit.linear_average_pressure,1e-7)
+    set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
 
     #isothermal 7
     unit.isothermal = pyo.Constraint(expr=
         inlet.temperature==outlet.temperature )
+    set_scaling_factor(unit.isothermal,1e-2)
 
     #average reynolds number
     average.Re = pyo.Expression(expr=
@@ -170,6 +177,7 @@ def add_equations(unit,config):
         (average.flow_mass/1.96)**2==
             (13.3*(298/101325))**2*unit.diameter**5*((inlet.pressure**2-outlet.pressure**2)*average.inverse_f/(average.G*average.temperature*unit.length*average.Z)) + unit.spos[2] - unit.sneg[2]
         ) #might need to modify constants
+    set_scaling_factor(unit.GFE,1e-2)
     
     #auxiliary constraints
     unit.inlet_pressure_max = pyo.Constraint(
@@ -181,6 +189,9 @@ def add_equations(unit,config):
     unit.average_pressure_max = pyo.Constraint(
         expr=average.pressure<=unit.max_pressure
     )
+    set_scaling_factor(unit.inlet_pressure_max,1e-7)
+    set_scaling_factor(unit.outlet_pressure_max,1e-7)
+    set_scaling_factor(unit.average_pressure_max,1e-7)
 
     #auxiliary expressions
     unit.Pdrop = pyo.Expression(expr=inlet.pressure-outlet.pressure)
@@ -192,6 +203,7 @@ def add_equations(unit,config):
     unit.misc_logic.add(expr=outlet.flow_mass>=0)
     unit.misc_logic.add(expr=average.flow_mass>=0)
     unit.misc_logic.add(expr=inlet.pressure>=outlet.pressure)
+    set_scaling_factor(unit.misc_logic[4],1e-5)
     #inlet.flow_mass.lb = 0
     #outlet.flow_mass.lb = 0
     #average.flow_mass.lb = 0
@@ -204,14 +216,14 @@ def guess_scales(unit):
     average = unit.control_volume.properties_avg[0]
 
     #variable and parameter scaling factors
-    set_scaling_factor(unit.diameter,1e2)
+    set_scaling_factor(unit.diameter,1e1)
     set_scaling_factor(unit.length,1e-3)
-    set_scaling_factor(unit.roughness,1e2)
+    set_scaling_factor(unit.roughness,1e5)
     set_scaling_factor(unit.max_pressure,1e-7)
     set_scaling_factor(unit.allowable_stress,1e-8)
-    set_scaling_factor(inlet.flow_mass,1e-2)
-    set_scaling_factor(outlet.flow_mass,1e-2)
-    set_scaling_factor(average.flow_mass,1e-2)
+    # set_scaling_factor(inlet.flow_mass,1e-2)
+    # set_scaling_factor(outlet.flow_mass,1e-2)
+    # set_scaling_factor(average.flow_mass,1e-2)
     set_scaling_factor(inlet.dens_mass,1e-2)
     set_scaling_factor(outlet.dens_mass,1e-2)
     set_scaling_factor(average.dens_mass,1e-2)
@@ -222,21 +234,6 @@ def guess_scales(unit):
     set_scaling_factor(outlet.temperature,1e-2)
     set_scaling_factor(average.temperature,1e-2)
     set_scaling_factor(average.mw,1e2)
-
-    #equality constraint scaling factors
-    set_scaling_factor(unit.control_volume.material_balances,1e-2)
-    set_scaling_factor(unit.state_material_balances,1e-2)
-    set_scaling_factor(unit.average_temperature,1e-2)
-    set_scaling_factor(unit.isothermal,1e-2)
-    set_scaling_factor(unit.constant_average_pressure,1e-7)
-    set_scaling_factor(unit.linear_average_pressure,1e-7)
-    set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
-    set_scaling_factor(unit.GFE,1e-2)
-    
-    #auxiliary constraint scaling factors
-    set_scaling_factor(unit.inlet_pressure_max,1e-7)
-    set_scaling_factor(unit.outlet_pressure_max,1e-7)
-    set_scaling_factor(unit.average_pressure_max,1e-7)
 
     set_scaling_factor(unit.spos[1],1e-1)
     set_scaling_factor(unit.sneg[1],1e-1)

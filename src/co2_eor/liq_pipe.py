@@ -95,7 +95,7 @@ def add_params(unit,config):
 
 def add_variables(unit,config):
     #diameter variable
-    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,6), initialize=1, units=units.m,)
+    unit.diameter = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0.003175,2), initialize=1, units=units.m,)
     unit.roughness = pyo.Var(domain=pyo.NonNegativeReals, bounds=(0,0.1), initialize=0.0018, units=units.m)
     unit.max_pressure = pyo.Var(domain=pyo.NonNegativeReals,bounds=(1,2000*100000),initialize=600*100000, units=units.Pa) #Pa
 
@@ -217,12 +217,15 @@ def add_equations(unit,config):
     set_scaling_factor(unit.linear_average_pressure,1e-7)
     set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
 
-    #for now, declare an expression on teh average state block to handle liquid viscosity
-    average.visc_d_phase = pyo.Expression(["Liq"],expr=1e-4)
+    #for now, declare an expression on the average state block to handle liquid viscosity
+    try:
+        pyo.value(average.visc_d_phase["Liq"])
+    except AttributeError:
+        average.visc_d_phase = pyo.Expression(["Liq"],expr=1e-4)
     #average reynolds number
     average.Re = pyo.Expression(expr=
-        average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
-        #smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
+        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
+        smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
         #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
         #smooth_abs(average.dens_mass*average.velocity*unit.diameter/9e-5,epsilon)
         #average.dens_mass*average.velocity*unit.diameter/(1e-4)
@@ -231,10 +234,10 @@ def add_equations(unit,config):
 
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
-        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re+epsilon)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
+        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
         )
     
-    #hydraulic equation 7
+    # #hydraulic equation 7
     unit.hydraulic = pyo.Constraint(expr=
         (inlet.pressure**2-outlet.pressure**2)/2*unit.diameter==
             average.pressure*average.dens_mass*average.velocity**2*unit.length/(average.inverse_f*2)
@@ -243,7 +246,15 @@ def add_equations(unit,config):
                         +average.pressure*average.dens_mass*unit.g*unit.height_change*unit.diameter
                             +unit.spos[2]-unit.sneg[2]
         )
-    set_scaling_factor(unit.hydraulic,1e-5)
+    # unit.hydraulic = pyo.Constraint(expr=
+    #     (inlet.pressure**2-outlet.pressure**2)/2==
+    #         average.pressure*average.dens_mass*average.velocity**2*unit.length/(unit.diameter*average.inverse_f*2)
+    #             +average.pressure*average.dens_mass*average.velocity**2*pyo.log(inlet.pressure/outlet.pressure)
+    #                 -(average.dens_mass*average.velocity)**2*(inlet.PD_ratio-outlet.PD_ratio)
+    #                     +average.pressure*average.dens_mass*unit.g*unit.height_change
+    #                         +unit.spos[2]-unit.sneg[2]
+    #     )
+    set_scaling_factor(unit.hydraulic,1e-8)
     
     #heat balance 8
     unit.isothermal_inlet = pyo.Constraint(expr=
@@ -339,6 +350,7 @@ def add_equations(unit,config):
     unit.misc_logic.add(expr=average.flow_mass>=0)
     unit.misc_logic.add(expr=inlet.pressure>=outlet.pressure)
     #unit.misc_logic.deactivate
+    set_scaling_factor(unit.misc_logic[4],1e-7)
 
     #mach number constraint
     """
@@ -439,11 +451,13 @@ class liqPipeData(UnitModelBlockData):
 
         for j in self.control_volume.properties_in[0].component_list:
             self.control_volume.properties_avg[0].flow_mol_comp[j] = pyo.value(self.control_volume.properties_in[0].flow_mol_comp[j])
-            self.control_volume.properties_out[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure) * 0.90
-        self.control_volume.properties_avg[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure) * 0.95
+        self.control_volume.properties_out[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure) * 0.98
+        self.control_volume.properties_avg[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure) * 0.99
 
         self.control_volume.properties_out[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
         self.control_volume.properties_avg[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
+
+        self.control_volume.properties_avg[0].enth_mol.value = pyo.value(self.control_volume.properties_in[0].enth_mol)
 
         self.initialize_states()
 
@@ -457,7 +471,7 @@ class liqPipeData(UnitModelBlockData):
         self.custom_propagate_state()
 
         if not self.diameter.is_fixed():
-            self.control_volume.properties_in[0].velocity = 1
+            self.control_volume.properties_in[0].velocity = 0.5
             calculate_variable_from_constraint(self.diameter,self.inlet_velocity)
             if pyo.value(self.diameter > pyo.value(self.diameter.ub)):
                 self.diameter = pyo.value(self.diameter.ub)

@@ -377,14 +377,14 @@ def build_costing_model(unit):
         "compressor":2.15,
     }
 
-    unit.costing.total_bare_module_cost = pyo.Expression(expr=
+    unit.costing.capital_cost = pyo.Expression(expr=
                                                          unit.column.costing.capital_cost * bm_factors['vertical_vessel']
                                                          + unit.exchanger1.costing.capital_cost * bm_factors["ST_exchanger"]
                                                          + unit.pump1.costing.capital_cost * bm_factors["pump"]
                                                          + (unit.compressor1.costing.capital_cost + unit.compressor2.costing.capital_cost) * bm_factors["compressor"]
                                                          + (unit.flash1.costing.capital_cost + unit.flash2.costing.capital_cost + unit.flash3.costing.capital_cost) * bm_factors["horizontal_vessel"]
     )
-    set_scaling_factor(unit.costing.total_bare_module_cost,1e-7)
+    set_scaling_factor(unit.costing.capital_cost,1e-7)
 
     unit.costing.refrigeration_duty = pyo.Expression(expr=unit.exchanger1.duty)
     unit.costing.electrical_power = pyo.Expression(expr=
@@ -445,7 +445,7 @@ class processingFacilityData(UnitModelBlockData):
         pass
         #TODO: MAKE THIS FUNCTION
 
-    def initialize(self,solver=None,tee=True,display_after=False):
+    def initialize(self,solver=None,tee=False,display_after=False):
         print(f'initializing {self.name}')
         self.custom_propagate_state()
 
@@ -485,7 +485,7 @@ class processingFacilityData(UnitModelBlockData):
             data.update({f'{statename} temperature (K)':pyo.value(state.temperature)})
             data.update({f'{statename} pressure (bar)':pyo.value(state.pressure)/100000})
             data.update({f'{statename} density (kg/m3)':pyo.value(state.dens_mass)})
-
+        data.update({f'Column Stages ':pyo.value(self.column.Nstages)})
         data.update({f'Loop Solvent Flow (mol/s)':pyo.value(self.loop_solvent_flow)})
         data.update({f'HX1 Outlet Temperature (K)':pyo.value(self.exchanger1.outlet_temperature)})
         data.update({f'Flash3 Pressure (bar)':pyo.value(self.flash3.pressure)/100000})
@@ -501,4 +501,8 @@ class processingFacilityData(UnitModelBlockData):
         data.update({f'Flash 2 Volflow (m3/s)':pyo.value(self.flash2.flow_vol)})
         data.update({f'Flash 3 Volflow (m3/s)':pyo.value(self.flash3.flow_vol)})
         data.update({f'Makeup Solvent (mol/s)':pyo.value(self.makeup_solvent_flow)})
+        for blk_name, blk in self.component_map(pyo.Block).items():
+            if hasattr(blk,"costing") and hasattr(blk.costing,"capital_cost"):
+                data.update({f'{blk_name} capital cost':pyo.value(blk.costing.capital_cost)})
+        data.update({f'Total electrical power':pyo.value(self.costing.electrical_power)})
         return pd.DataFrame(data,index=[self.name])
