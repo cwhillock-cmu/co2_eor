@@ -30,3 +30,8 @@ test = [
 
 [tool.uv.sources]
 idaes-pse = { git = "https://github.com/cwhillock-cmu/idaes-pse", branch = "main" }
+
+[tool.uv]
+override-dependencies = [
+    "idaes-pse"
+]
