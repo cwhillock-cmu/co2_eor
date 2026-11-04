@@ -142,9 +142,9 @@ def add_equations(unit,config):
         unit.constant_average_pressure.activate()
     else:
         unit.linear_average_pressure.activate()
-    set_scaling_factor(unit.constant_average_pressure,1e-7)
-    set_scaling_factor(unit.linear_average_pressure,1e-7)
-    set_scaling_factor(unit.nonlinear_average_pressure,1e-7)
+    set_scaling_factor(unit.constant_average_pressure,1e-6)
+    set_scaling_factor(unit.linear_average_pressure,1e-6)
+    set_scaling_factor(unit.nonlinear_average_pressure,1e-6)
 
     #isothermal 7
     unit.isothermal = pyo.Constraint(expr=
@@ -154,7 +154,8 @@ def add_equations(unit,config):
     #average reynolds number
     average.Re = pyo.Expression(expr=
         #smooth_abs(average.dens_mass*average.velocity*unit.diameter/(15E-6),epsilon)
-        smooth_abs(average.dens_mass*average.velocity*unit.diameter/(average.visc_d_phase['Vap']),epsilon)
+        #smooth_abs(average.dens_mass*average.velocity*unit.diameter/(average.visc_d_phase['Vap']),epsilon)
+        average.dens_mass*average.velocity*unit.diameter/(average.visc_d_phase['Vap'])
         )
     
     #average friction factor
@@ -168,16 +169,22 @@ def add_equations(unit,config):
     
     #specific gravity
     average.G = pyo.Expression(expr=
-        average.dens_mass/1.2754) #standard density of air is 1.2754 kg/m3 (0C 100 kPa)
+        #average.dens_mass/1.2754 #standard density of air kg/m3 (0C 100 kPa)
+        #average.dens_mass/1.184 #standard density of air kg/m3 (25C 101 kPa)
+        average.mw/29E-3
+        ) 
     
     #general flow equation 8
     unit.GFE = pyo.Constraint(expr=
         #average.flow_mass/1.96==
-        #    13.3*(298/101325)*unit.diameter**2.5*((inlet.pressure**2-outlet.pressure**2)*average.inverse_f/(average.G*average.temperature*unit.length*average.Z)+epsilon)**0.5
+        # #    13.3*(298/101325)*unit.diameter**2.5*((inlet.pressure**2-outlet.pressure**2)*average.inverse_f/(average.G*average.temperature*unit.length*average.Z)+epsilon)**0.5
         (average.flow_mass/1.96)**2==
             (13.3*(298/101325))**2*unit.diameter**5*((inlet.pressure**2-outlet.pressure**2)*average.inverse_f/(average.G*average.temperature*unit.length*average.Z)) + unit.spos[2] - unit.sneg[2]
+        # (average.flow_mass/1.96*86400)**2==
+        #             (1.1494/1000*(298/101325))**2*(unit.diameter*1000)**5*((inlet.pressure**2-outlet.pressure**2)*average.inverse_f/(average.G*average.temperature*unit.length/1000*average.Z)) + unit.spos[2] - unit.sneg[2]
         ) #might need to modify constants
     set_scaling_factor(unit.GFE,1e-2)
+    #set_scaling_factor(unit.GFE,1e-6)
     
     #auxiliary constraints
     unit.inlet_pressure_max = pyo.Constraint(
@@ -227,9 +234,9 @@ def guess_scales(unit):
     set_scaling_factor(inlet.dens_mass,1e-2)
     set_scaling_factor(outlet.dens_mass,1e-2)
     set_scaling_factor(average.dens_mass,1e-2)
-    set_scaling_factor(inlet.pressure,1e-7)
-    set_scaling_factor(outlet.pressure,1e-7)
-    set_scaling_factor(average.pressure,1e-7)
+    set_scaling_factor(inlet.pressure,1e-6)
+    set_scaling_factor(outlet.pressure,1e-6)
+    set_scaling_factor(average.pressure,1e-6)
     set_scaling_factor(inlet.temperature,1e-2)
     set_scaling_factor(outlet.temperature,1e-2)
     set_scaling_factor(average.temperature,1e-2)
@@ -281,6 +288,9 @@ class gasPipeData(UnitModelBlockData):
     def custom_propagate_state(self):
         propagate_state(source=self.inlet,destination=self.outlet)
 
+        for j in self.control_volume.properties_in[0].component_list:
+            self.control_volume.properties_avg[0].flow_mol_comp[j] = pyo.value(self.control_volume.properties_in[0].flow_mol_comp[j])
+
         self.control_volume.properties_avg[0].pressure.value = pyo.value(self.control_volume.properties_in[0].pressure)
 
         self.outlet.temperature[0].value = pyo.value(self.control_volume.properties_in[0].temperature)
@@ -293,7 +303,7 @@ class gasPipeData(UnitModelBlockData):
         self.custom_propagate_state()
 
         if not self.diameter.is_fixed():
-            self.control_volume.properties_in[0].velocity = 1
+            self.control_volume.properties_in[0].velocity = 0.5
             calculate_variable_from_constraint(self.diameter,self.inlet_velocity)
             if pyo.value(self.diameter > pyo.value(self.diameter.ub)):
                 self.diameter = pyo.value(self.diameter.ub)
@@ -351,6 +361,8 @@ class gasPipeData(UnitModelBlockData):
             data.update({f'{statename} pressure (bar)':pyo.value(state.pressure)/100000})
             data.update({f'{statename} density (kg/m3)':pyo.value(state.dens_mass)})
             data.update({f'{statename} velocity (m/s)':pyo.value(state.velocity)})
+        data.update({"average MW (kg/mol)":pyo.value(self.control_volume.properties_avg[t].mw)})
+        data.update({"average viscosity (Pa*s)":pyo.value(self.control_volume.properties_avg[t].visc_d_phase['Vap'])})
         data.update({"average Re":pyo.value(self.control_volume.properties_avg[t].Re)})
         data.update({"average 1/f":pyo.value(self.control_volume.properties_avg[t].inverse_f)})
         data.update({"average Z":pyo.value(self.control_volume.properties_avg[t].Z)})

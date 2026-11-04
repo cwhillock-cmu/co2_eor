@@ -1,14 +1,17 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
-    "python_full_version < '3.15' and sys_platform == 'win32'",
     "python_full_version >= '3.15' and sys_platform == 'emscripten'",
-    "python_full_version < '3.15' and sys_platform == 'emscripten'",
     "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.15' and sys_platform == 'win32'",
+    "python_full_version < '3.15' and sys_platform == 'emscripten'",
     "python_full_version < '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
+
+[manifest]
+overrides = [{ name = "idaes-pse", git = "https://github.com/cwhillock-cmu/idaes-pse?branch=main" }]
 
 [[package]]
 name = "absl-py"
@@ -198,7 +201,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cvxpy" },
-    { name = "idaes-pse", extra = ["ui"] },
+    { name = "idaes-pse" },
     { name = "ipython" },
     { name = "numpy" },
     { name = "openpyxl" },
@@ -476,24 +479,6 @@ wheels = [
 ]
 
 [[package]]
-name = "idaes-connectivity"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "idaes-pse" },
-    { name = "ipython" },
-    { name = "pandas" },
-    { name = "psutil" },
-    { name = "pydantic" },
-    { name = "pyomo" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ab/45/6a5f51a9352a0651b519d042989886f1e69faa471f0021bcde4daf3ba5b8/idaes_connectivity-0.1.0.tar.gz", hash = "sha256:a131824c36b4e2bc198f0197183c2534601b58e6814127f3d2618133b751faf1", size = 137043, upload-time = "2026-02-14T14:36:07.754Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/b9/5394d590c23fe8723e29ecef6533f484ca2a157c1ebcbd7540b770008529/idaes_connectivity-0.1.0-py3-none-any.whl", hash = "sha256:27e7e6a3e59959fa2e379a6865f8521bd0a93d1486bca41b62bd12cf4fc13725", size = 137299, upload-time = "2026-02-14T14:36:05.957Z" },
-]
-
-[[package]]
 name = "idaes-pse"
 version = "2.7.1.dev9490+g66f49f9e9"
 source = { git = "https://github.com/cwhillock-cmu/idaes-pse?branch=main#66f49f9e95df9d55a1c2d5cc3ea5ace8caf3debc" }
@@ -508,26 +493,6 @@ dependencies = [
     { name = "pyomo" },
     { name = "scipy" },
     { name = "sympy" },
-]
-
-[package.optional-dependencies]
-ui = [
-    { name = "idaes-connectivity" },
-    { name = "idaes-ui" },
-]
-
-[[package]]
-name = "idaes-ui"
-version = "0.24.8"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pint" },
-    { name = "pydantic" },
-    { name = "setuptools" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/68/1e/6a885292befe3917770a8faa43ebf3985ec67fb4ee50ad70e9fd025ec409/idaes_ui-0.24.8.tar.gz", hash = "sha256:7375ffddcc679f37466c62f747d5c73e7b27e5bcc4a42bf2045d220351270aec", size = 20858605, upload-time = "2024-09-06T21:18:35.88Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/78/54695e3de7390a38c8e38711554f7455663e1de9bd0a6dd6617275ee637c/idaes_ui-0.24.8-py3-none-any.whl", hash = "sha256:ca2895eebb9bef40cef3679f280ead7402013b1c7c68ee1c5fccb199dc863b73", size = 14796066, upload-time = "2024-09-06T21:18:33.11Z" },
 ]
 
 [[package]]

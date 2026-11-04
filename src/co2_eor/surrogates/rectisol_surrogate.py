@@ -93,7 +93,8 @@ def add_global_params(unit,config):
 def add_global_vars(unit,config):
     unit.loop_solvent_flow = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,bounds=(0,10000),units=units.mol/units.s)
     set_scaling_factor(unit.loop_solvent_flow,1e-2)
-    unit.makeup_solvent_flow = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,bounds=(0,10),units=units.mol/units.s)
+    unit.makeup_solvent_flow = pyo.Var(domain=pyo.Reals,initialize=1,units=units.mol/units.s)
+    #unit.makeup_solvent_flow = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,bounds=(0,10),units=units.mol/units.s)
     set_scaling_factor(unit.makeup_solvent_flow,1e2)
 
 def add_units(unit,config):
@@ -120,7 +121,7 @@ def add_units(unit,config):
     set_scaling_factor(unit.compressor1.work_mechanical,1e-4)
 
     unit.exchanger1 = UnitModelBlock(dynamic=False,has_holdup=False)
-    unit.exchanger1.area = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,units=units.m**2)
+    unit.exchanger1.area = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,bounds=(0,None),units=units.m**2)
     set_scaling_factor(unit.exchanger1.area,1e-1)
     unit.exchanger1.pressure = pyo.Expression(expr=inlet.pressure)
     unit.exchanger1.outlet_temperature = pyo.Var(domain=pyo.NonNegativeReals,bounds=(200,300),initialize=260,units=units.K)
@@ -245,6 +246,16 @@ def build_surrogate(unit,config):
     unit.surrogate = SurrogateBlock()
     unit.surrogate.build_model(config.surrogate_object,input_vars=inputs,output_vars=outputs,use_surrogate_bounds=False)
 
+    #scale surrogate eqns
+    set_scaling_factor(unit.surrogate.alamo_constraint['recycle_outlet_co2_molflow'],1e-1)
+    set_scaling_factor(unit.surrogate.alamo_constraint['recycle_outlet_ch4_molflow'],1e-1)
+    set_scaling_factor(unit.surrogate.alamo_constraint['top_outlet_temperature'],1e-2)
+    set_scaling_factor(unit.surrogate.alamo_constraint['HX1_duty'],1e-6)
+    set_scaling_factor(unit.surrogate.alamo_constraint['pump1_work'],1e-5)
+    set_scaling_factor(unit.surrogate.alamo_constraint['comp1_work'],1e-2)
+    set_scaling_factor(unit.surrogate.alamo_constraint['comp2_work'],1e-6)
+    set_scaling_factor(unit.surrogate.alamo_constraint['comp2_duty'],1e-6)
+
     #build inlet bound constraints
     unit.input_min_cons = pyo.ConstraintList()
     for i,var in enumerate(inputs):
@@ -358,16 +369,16 @@ def build_costing_model(unit):
     #TODO:implement
     unit.solvent_tank.costing = pyo.Block()
 
-    unit.pump1.costing = idaes.core.UnitModelCostingBlock(
-        flowsheet_costing_block=unit.costing,
-        costing_method=SSLWCostingData.cost_pump,
-        costing_method_arguments={
-            "pump_type":"Centrifugal",
-            "material_type":"StainlessSteel",
-            "pump_type_factor":1.4,
-            "motor_type":"open"
-        }
-    )
+    # unit.pump1.costing = idaes.core.UnitModelCostingBlock(
+    #     flowsheet_costing_block=unit.costing,
+    #     costing_method=SSLWCostingData.cost_pump,
+    #     costing_method_arguments={
+    #         "pump_type":"Centrifugal",
+    #         "material_type":"StainlessSteel",
+    #         "pump_type_factor":1.4,
+    #         "motor_type":"open"
+    #     }
+    # )
 
     bm_factors = {
         "ST_exchanger":3.17,
@@ -380,7 +391,7 @@ def build_costing_model(unit):
     unit.costing.capital_cost = pyo.Expression(expr=
                                                          unit.column.costing.capital_cost * bm_factors['vertical_vessel']
                                                          + unit.exchanger1.costing.capital_cost * bm_factors["ST_exchanger"]
-                                                         + unit.pump1.costing.capital_cost * bm_factors["pump"]
+                                                         #+ unit.pump1.costing.capital_cost * bm_factors["pump"]
                                                          + (unit.compressor1.costing.capital_cost + unit.compressor2.costing.capital_cost) * bm_factors["compressor"]
                                                          + (unit.flash1.costing.capital_cost + unit.flash2.costing.capital_cost + unit.flash3.costing.capital_cost) * bm_factors["horizontal_vessel"]
     )
@@ -428,8 +439,8 @@ class processingFacilityData(UnitModelBlockData):
                 self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.9
                 self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.1
             else:
-                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.5
-                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.5
+                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.33
+                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.67
 
         self.initialize_states()
 

@@ -226,7 +226,7 @@ def add_equations(unit,name,config):
     #for now, declare an expression on the average state block to handle liquid viscosity
     try:
         pyo.value(reservoir_state.visc_d_phase["Liq"])
-    except AttributeError:
+    except KeyError:
         reservoir_state.visc_d_phase = pyo.Expression(["Liq"],expr=1e-4)
 
     #use smooth max so that well pattern can be "turned off" and not get negative flow

@@ -220,7 +220,7 @@ def add_equations(unit,config):
     #for now, declare an expression on the average state block to handle liquid viscosity
     try:
         pyo.value(average.visc_d_phase["Liq"])
-    except AttributeError:
+    except KeyError:
         average.visc_d_phase = pyo.Expression(["Liq"],expr=1e-4)
     #average reynolds number
     average.Re = pyo.Expression(expr=

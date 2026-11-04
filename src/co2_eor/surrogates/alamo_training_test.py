@@ -2,8 +2,8 @@
 import idaes.core
 import pandas as pd
 #df = pd.read_excel('temps/LHSdata123.xlsx')
-#df = pd.read_csv('temps/LHSdata1.csv')
-df = pd.read_excel('temps/LHS_data1_cut.xlsx')
+df = pd.read_csv('temps/LHSdata1.csv')
+#df = pd.read_excel('temps/LHS_data1_cut.xlsx')
 
 clean_df = df[df['UOSSTAT2']==8]
 
@@ -13,7 +13,10 @@ input_labels = ['feed_co2_molflow',	'feed_ch4_molflow',	'feed_pressure',	'feed_t
                 	'HX1_outlet_temperature',	'flash3_outlet_pressure',	'column_stages',]
 output_labels = ['recycle_outlet_co2_molflow',	'recycle_outlet_ch4_molflow',	#'recycle_outlet_pressure',#	'recycle_outlet_temperature',
                  	'top_outlet_temperature',	'column_diameter',	'HX1_area',	'HX1_duty',	'pump1_volflow_in',	'pump1_work',	'comp1_work',
-                        	'comp2_work',	'comp2_duty',	'flash1_volflow_in',	'flash2_volflow_in',	'flash3_volflow_in',	'makeup_solvent_molflow',]
+                        	'comp2_work',	#'comp2_duty',
+                                	'flash1_volflow_in',	'flash2_volflow_in',	'flash3_volflow_in',#	'makeup_solvent_molflow',
+                                    ]
+# output_labels = ['recycle_outlet_co2_molflow']
 
 surrogate_input_bounds = [
     [400,200,50e5,320,2500,260,10e5,10.5],
@@ -31,21 +34,45 @@ trainer = idaes.core.surrogate.AlamoTrainer(
     output_labels=output_labels,
     training_dataframe = training_df,
     input_bounds=input_bounds,
+    #filename="temps/alamo_file.alm",
+    overwrite_files=True,
 )
 trainer.config.constant = 1
 trainer.config.linfcns = 1
-trainer.config.monomialpower = [2]
-trainer.config.multi2power = [1]
+trainer.config.monomialpower = [2,3,4,5]
+trainer.config.multi2power = [1,2,3]
 trainer.config.logfcns = 1
-#trainer.config.expfcns = 1
-#trainer.config.ratiopower = [1,2]
-trainer.config.screener = 0
+trainer.config.expfcns = 1
+trainer.config.ratiopower = [1,2,3]
+#trainer.config.sinfcns = 1
+#trainer.config.cosfcns = 1
+trainer.config.multi3power = [1,2]
+trainer.config.screener = 1
 trainer.config.modeler = 1
+trainer.config.convpen = 1
 trainer.config.maxtime = 14400
-#trainer.config.maxterms = [50] * len(output_labels)
-#trainer.config.ZMIN = [0,0,0,0,0,-1e8,0,0,0,-1e8,-1e8,0,0,0,0]
+trainer.config.ncvf = 10
+#trainer.config.maxterms = [10] * len(output_labels)
+#trainer.config.minterms = [64] * len(output_labels)
+#trainer.config.ZMIN = [0,0,0,0,-1e12,-1e12,0,0,0,-1e8,-1e12,0,0,0,0]
+#trainer.config.ZMIN = [0] * len(output_labels)
+#trainer.config.ZMAX = [1000] * len(output_labels)
+#trainer.config.EXTRAPXMIN = [400,200,50e5,320,2000,245,6e6,5]
+#trainer.config.EXTRAPXMAX = [100,50,10e5,290,2000,245,6e6,5]
+#trainer.config.CRROBUST = False
+#trainer.config.CRMAXITER = 100000
 #trainer.config.numlimitbasis = 0
-trainer.config.xfactor = [100,10,1e6,100,100,100,1e5,1]
+input_scales = [100,10,1e6,100,100,100,1e5,1]
+trainer.config.scalez = 1
+trainer.config.xfactor = input_scales
+#trainer.config.linearerror = 1
+#trainer.config.builder = True
+#trainer.config.backstepper = True
+# custom_basis = []
+# for i in range(len(input_labels)):
+#     custom_basis.append(f"log(({input_labels[i]}/{str(input_scales[i])})^2)")
+# trainer.config.custom_basis_functions = custom_basis
+
 success, alm_surr, msg = trainer.train_surrogate()
 
 surrogate_expressions = trainer._results['Model']

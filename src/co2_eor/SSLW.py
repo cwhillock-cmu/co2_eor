@@ -61,7 +61,7 @@ from idaes.core.util.constants import Constants
 from idaes.core.util.math import smooth_max
 from idaes.core.util.misc import StrEnum
 
-from idaes.core.util.math import smooth_abs, safe_log
+from idaes.core.util.math import smooth_abs, safe_log, safe_sqrt
 
 from idaes.core import (
     FlowsheetCostingBlockData,
@@ -1483,16 +1483,25 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         @blk.Constraint()
         def size_factor_eq(blk):
             return blk.size_factor == (
+                # Q
+                # * pyo.units.minute
+                # / pyo.units.gallon
+                # * (
+                #     blk.pump_head
+                #     * pyo.units.pound
+                #     / pyo.units.pound_force
+                #     / pyo.units.foot
+                # )
+                # ** 0.5
                 Q
                 * pyo.units.minute
                 / pyo.units.gallon
-                * (
+                * safe_sqrt(
                     blk.pump_head
                     * pyo.units.pound
                     / pyo.units.pound_force
-                    / pyo.units.foot
+                    / pyo.units.foot+2
                 )
-                ** 0.5
             )
 
         # Material factor
