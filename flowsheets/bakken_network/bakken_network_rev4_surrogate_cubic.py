@@ -596,7 +596,7 @@ def initialization1():
     m.fs.processing_facility.activate_surrogate_input_bounds()
 
     #guess inlet flowrate
-    m.fs.source_comp.inlet.flow_mol[0,'co2'].unfix()
+    m.fs.source_comp.inlet.flow_mol_comp[0,'co2'].unfix()
 
 from co2_eor.utility.util_funcs import run_with_redirection
 run_with_redirection(initialization1,output_dir+m_name+'_initialization1_log.txt')
@@ -667,7 +667,7 @@ ipopt.options['expect_infeasible_problem']='yes'
 #ipopt.options['OF_evaluate_orig_obj_at_resto_trial']='no'
 ipopt.options['OF_start_with_resto']='yes'
 #ipopt.options['OF_soft_resto_pderror_reduction_factor']=0
-#ipopt.options['OF_required_infeasibility_reduction']=0.99
+ipopt.options['OF_required_infeasibility_reduction']=0.99
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 res=ipopt.solve(scaled_m,tee=True,keepfiles=True,symbolic_solver_labels=True,)

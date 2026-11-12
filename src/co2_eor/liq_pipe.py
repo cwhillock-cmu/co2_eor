@@ -233,8 +233,8 @@ def add_equations(unit,config):
     #     )
     average.Re = pyo.Var(bounds=(0,None),initialize=1,domain=pyo.NonNegativeReals)
     set_scaling_factor(average.Re,1e-7)
-    average.Re_con = pyo.Constraint(expr=average.Re==average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"])
-    set_scaling_factor(average.Re_con,1e-7)
+    unit.average_Re_con = pyo.Constraint(expr=average.Re==average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"])
+    set_scaling_factor(unit.average_Re_con,1e-7)
 
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
@@ -462,7 +462,7 @@ class liqPipeData(UnitModelBlockData):
 
         self.control_volume.properties_avg[0].enth_mol.value = pyo.value(self.control_volume.properties_in[0].enth_mol)
 
-        calculate_variable_from_constraint(self.control_volume.properties_avg[0].Re,self.control_volume.properties_avg[0].Re_con)
+        calculate_variable_from_constraint(self.control_volume.properties_avg[0].Re,self.average_Re_con)
 
         self.initialize_states()
 
