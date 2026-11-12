@@ -303,8 +303,8 @@ def add_equations(unit,name,config):
             )
     inlet.pressure.lb = pyo.value(unit.reference_pressure)
     #unit.min_pressure_constraint.deactivate()
-    set_scaling_factor(unit.min_pressure_constraint,1e-7)
-    set_scaling_factor(unit.max_pressure_constraint,1e-7)
+    set_scaling_factor(unit.min_pressure_constraint,1e-8)
+    set_scaling_factor(unit.max_pressure_constraint,1e-8)
 
 def guess_scales(unit,name,config):
     inlet=unit.control_volume.properties_in[0]

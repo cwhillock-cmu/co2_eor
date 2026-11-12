@@ -5,6 +5,7 @@ from pyomo.network import Arc
 import contextlib
 import pickle
 import time
+from pathlib import Path
 
 import idaes.models.properties.general_helmholtz as idaes_helmholtz
 import idaes.models.unit_models.pressure_changer as idaes_pressure_changer
@@ -25,8 +26,9 @@ from co2_eor.SSLW import SSLWCosting, SSLWCostingData
 
 from co2_eor.utility.solvers import ipopt
 
-output_dir = 'temps/'
 m_name = 'bakken_network_rev4_surrogate_HH'
+output_dir = 'temps/' + m_name + '/'
+Path(output_dir).mkdir(parents=True, exist_ok=True)
 m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)
 
@@ -655,8 +657,10 @@ report_infeasibilities(m, output_dir+m_name+"_presolve_violations.log")
 from idaes.core.scaling.autoscaling import AutoScaler
 autoScaler=AutoScaler(overwrite=True)
 autoScaler.scale_variables_by_magnitude(m)
-autoScaler2=AutoScaler(overwrite=True)
-autoScaler2.scale_constraints_by_jacobian_norm(m)
+#autoScaler2=AutoScaler(overwrite=True)
+autoScaler.scale_constraints_by_jacobian_norm(m)
+
+m.write(output_dir+m_name+"_model.nl", format="nl")
 
 ipopt.options['max_iter'] = 30000
 ipopt.options['linear_solver']='ma27'
@@ -668,13 +672,13 @@ ipopt.options['expect_infeasible_problem']='yes'
 #ipopt.options['OF_evaluate_orig_obj_at_resto_trial']='no'
 ipopt.options['OF_start_with_resto']='yes'
 #ipopt.options['OF_soft_resto_pderror_reduction_factor']=0
-ipopt.options['OF_required_infeasibility_reduction']=0.99
+#ipopt.options['OF_required_infeasibility_reduction']=0.99
 #scale model
 scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
-res=ipopt.solve(scaled_m,tee=True)
+res=ipopt.solve(scaled_m,tee=True,keepfiles=True,symbolic_solver_labels=True,)
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
-with open('temps/flowsheet7_surrogate_HH_postsolve_display.txt', 'w') as f:
+with open(output_dir+m_name+"_postsolve_display.txt", 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
 
@@ -683,7 +687,7 @@ report_infeasibilities(m, output_dir+m_name+"_postsolve_violations.log")
 pyo.assert_optimal_termination(res)
 
 from co2_eor.utility.util_funcs import export_flowsheet_to_excel
-export_flowsheet_to_excel(m.fs, output_dir+m_name+'_surrogate_HH_solve.xlsx')
+export_flowsheet_to_excel(m.fs, output_dir+m_name+'_solve.xlsx')
 
 m.fs.visualize(m_name)
 time.sleep(5)

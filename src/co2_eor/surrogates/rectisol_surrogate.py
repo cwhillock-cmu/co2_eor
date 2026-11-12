@@ -194,7 +194,7 @@ def add_units(unit,config):
     unit.pump1.config.declare('thermodynamic_assumption',ConfigValue(default=idaes.models.unit_models.pressure_changer.ThermodynamicAssumption.pump))
     unit.pump1.control_volume = pyo.Block()
     unit.pump1.control_volume.properties_in = pyo.Block(unit.flowsheet().time)    
-    unit.pump1.work_mechanical = pyo.Var(unit.flowsheet().time,domain=pyo.NonNegativeReals,initialize=100000,units=units.W)   
+    unit.pump1.work_mechanical = pyo.Var(unit.flowsheet().time,domain=pyo.NonNegativeReals,bounds=(0,None),initialize=100000,units=units.W)   
     set_scaling_factor(unit.pump1.work_mechanical,1e-5) 
     unit.pump1.control_volume.properties_in[0].flow_vol = pyo.Var(domain=pyo.NonNegativeReals,initialize=0.1,bounds=(0,10),units=units.m**3/units.s)
     set_scaling_factor(unit.pump1.control_volume.properties_in[0].flow_vol,1e2)

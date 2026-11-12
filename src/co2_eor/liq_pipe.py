@@ -289,7 +289,7 @@ def add_equations(unit,config):
     else:
         unit.isothermal_inlet.activate()
     set_scaling_factor(unit.isothermal_inlet,1e-2)
-    set_scaling_factor(unit.nonisothermal,1e-2)
+    set_scaling_factor(unit.nonisothermal,1e-6)
     set_scaling_factor(unit.isothermal_ambient,1e-2)
     set_scaling_factor(unit.no_JT,1e-2)
 

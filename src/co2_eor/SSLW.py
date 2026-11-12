@@ -1618,8 +1618,8 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         # Efficiency of the electric motor
         eta_m = (
             0.80
-            + 0.0319 * pyo.log(work / pyo.units.hp)
-            - 0.00182 * pyo.log(work / pyo.units.hp) ** 2
+            + 0.0319 * pyo.log(work / pyo.units.hp+1e-4)
+            - 0.00182 * pyo.log(work / pyo.units.hp+1e-4) ** 2
         )
         work_motor = work / eta_m
 
@@ -1635,10 +1635,10 @@ class SSLWCostingData(FlowsheetCostingBlockData):
             return blk.base_motor_cost_per_unit == (
                 pyo.exp(
                     5.8259
-                    + 0.13141 * pyo.log(work_motor / pyo.units.hp)
-                    + 0.053255 * pyo.log(work_motor / pyo.units.hp) ** 2
-                    + 0.028628 * pyo.log(work_motor / pyo.units.hp) ** 3
-                    - 0.0035549 * pyo.log(work_motor / pyo.units.hp) ** 4
+                    + 0.13141 * pyo.log(work_motor / pyo.units.hp+1e-4)
+                    + 0.053255 * pyo.log(work_motor / pyo.units.hp+1e-4) ** 2
+                    + 0.028628 * pyo.log(work_motor / pyo.units.hp+1e-4) ** 3
+                    - 0.0035549 * pyo.log(work_motor / pyo.units.hp+1e-4) ** 4
                 )
                 * pyo.units.USD_CE394
             )

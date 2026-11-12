@@ -5,6 +5,7 @@ from pyomo.network import Arc
 import contextlib
 import pickle
 import time
+from pathlib import Path
 
 import idaes.models.properties.general_helmholtz as idaes_helmholtz
 import idaes.models.unit_models.pressure_changer as idaes_pressure_changer
@@ -25,8 +26,9 @@ from co2_eor.SSLW import SSLWCosting, SSLWCostingData
 
 from co2_eor.utility.solvers import ipopt
 
-output_dir = 'temps/'
 m_name = 'flowsheet7_rev2_surrogate_HH'
+output_dir = 'temps/' + m_name + '/'
+Path(output_dir).mkdir(parents=True, exist_ok=True)
 m = pyo.ConcreteModel()
 m.fs = idaes.core.FlowsheetBlock(dynamic=False)
 
@@ -492,7 +494,7 @@ scaled_m = pyo.TransformationFactory("core.scale_model").create_using(m)
 res=ipopt.solve(scaled_m,tee=True)
 pyo.TransformationFactory("core.scale_model").propagate_solution(scaled_m,m)
 
-with open('temps/flowsheet7_surrogate_HH_postsolve_display.txt', 'w') as f:
+with open(output_dir+m_name+'_postsolve_display.txt', 'w') as f:
     with contextlib.redirect_stdout(f):
         m.display()
 
