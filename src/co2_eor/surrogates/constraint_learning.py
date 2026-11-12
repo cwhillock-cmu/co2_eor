@@ -322,7 +322,9 @@ def learn_separating_hyperplane(
 # =====================================================================
 if __name__ == "__main__":
     #df = pd.read_excel('temps/LHSdata123.xlsx')
-    df = pd.read_csv('temps/LHSdata1.csv')
+    df_raw = pd.read_csv('temps/LHSdata1.csv')
+    df = df_raw[(df_raw['recycle_outlet_co2_molflow']/df_raw['feed_co2_molflow']>0.90) | df_raw['PER_ERROR'] == 1]
+    #df = df_raw
 
     # Run function specifying feature columns and 1 target column
     input_features = ['feed_co2_molflow',	
@@ -349,5 +351,5 @@ if __name__ == "__main__":
     df2.to_excel("temps/LHS_data1_cut.xlsx",index=False)
 
     model2, pipeline2 = learn_separating_hyperplane(
-        df=df2, feature_cols=input_features, target_col=target,scaler_type="standard",class_weight=None
+        df=df2, feature_cols=input_features, target_col=target,scaler_type="standard",class_weight='balanced'
     )

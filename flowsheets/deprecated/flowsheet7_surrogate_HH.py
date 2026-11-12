@@ -138,14 +138,13 @@ compressor_costing_config={
     }
 }
 
-
 surrogate_input_bounds = [
-    [400,200,50e5,320,2000,260,6e5,10.5],
-    [100,50,10e5,290,800,220,2e5,3.5]
+    [400,200,50e5,320,2000,260,6e5,10],
+    [100,50,10e5,290,800,220,2e5,4]
 ]
 hyperplane_list = [
-    {"weights": [1.12241413e-03, -2.56485953e-02, 1.67543279e-06, 2.40731609e-03, 1.42386045e-03, 1.04199595e-02, -6.81482689e-06, 9.81953962e-01],
-     "bias":-15.0399895}
+    {"weights": [ 1.31634575e-04, -1.74118395e-02,  1.11402234e-06,  3.11680452e-03, 5.56625115e-04,  1.18343523e-02, -3.86637591e-06,  8.92055207e-01],
+     "bias":-12.211333434553202}
 ]
 surrogate_object = idaes.core.surrogate.AlamoSurrogate.load_from_file('temps/alamo_surrogate.json')
 processingFacility_config = {
@@ -432,16 +431,16 @@ initialization_type1(m)
 
 m.fs.processing_facility.activate_surrogate_input_bounds()
 #m.fs.processing_facility.input_max_cons[1].deactivate()
-m.fs.processing_facility.inlet.flow_mol_comp[0,'co2'].lb = 100
-m.fs.processing_facility.inlet.flow_mol_comp[0,'ch4'].lb = 50
-m.fs.processing_facility.inlet.flow_mol_comp[0,'ch4'].ub = 200
-m.fs.processing_facility.inlet.flow_mol_comp[0,'co2'].ub = 400
-m.fs.processing_facility.loop_solvent_flow.lb = 800
-m.fs.processing_facility.loop_solvent_flow.ub = 2000
-m.fs.processing_facility.exchanger1.outlet_temperature.lb = 220
-m.fs.processing_facility.exchanger1.outlet_temperature.ub = 250
-m.fs.processing_facility.column.Nstages.lb = 4
-m.fs.processing_facility.column.Nstages.ub = 10
+# m.fs.processing_facility.inlet.flow_mol_comp[0,'co2'].lb = 100
+# m.fs.processing_facility.inlet.flow_mol_comp[0,'ch4'].lb = 50
+# m.fs.processing_facility.inlet.flow_mol_comp[0,'ch4'].ub = 200
+# m.fs.processing_facility.inlet.flow_mol_comp[0,'co2'].ub = 400
+# m.fs.processing_facility.loop_solvent_flow.lb = 800
+# m.fs.processing_facility.loop_solvent_flow.ub = 2000
+# m.fs.processing_facility.exchanger1.outlet_temperature.lb = 220
+# m.fs.processing_facility.exchanger1.outlet_temperature.ub = 250
+# m.fs.processing_facility.column.Nstages.lb = 4
+# m.fs.processing_facility.column.Nstages.ub = 10
 
 #m.fs.well1.inlet.pressure[0].fix(450*100000)
 #m.fs.well2.inlet.pressure[0].fix(475*100000)

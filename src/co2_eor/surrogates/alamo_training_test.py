@@ -2,10 +2,12 @@
 import idaes.core
 import pandas as pd
 #df = pd.read_excel('temps/LHSdata123.xlsx')
-df = pd.read_csv('temps/LHSdata1.csv')
+#df = pd.read_csv('temps/LHSdata1.csv')
 #df = pd.read_excel('temps/LHS_data1_cut.xlsx')
+df = pd.read_csv('temps/LHSdata4.csv')
 
-clean_df = df[df['UOSSTAT2']==8]
+clean_df = df[df['PER_ERROR']==0]
+clean_df = clean_df[clean_df['recycle_outlet_co2_molflow']/clean_df['feed_co2_molflow']>=0.90]
 
 print(clean_df)
 
@@ -13,8 +15,8 @@ input_labels = ['feed_co2_molflow',	'feed_ch4_molflow',	'feed_pressure',	'feed_t
                 	'HX1_outlet_temperature',	'flash3_outlet_pressure',	'column_stages',]
 output_labels = ['recycle_outlet_co2_molflow',	'recycle_outlet_ch4_molflow',	#'recycle_outlet_pressure',#	'recycle_outlet_temperature',
                  	'top_outlet_temperature',	'column_diameter',	'HX1_area',	'HX1_duty',	'pump1_volflow_in',	'pump1_work',	'comp1_work',
-                        	'comp2_work',	#'comp2_duty',
-                                	'flash1_volflow_in',	'flash2_volflow_in',	'flash3_volflow_in',#	'makeup_solvent_molflow',
+                        	'comp2_work',	'comp2_duty',
+                                	'flash1_volflow_in',	'flash2_volflow_in',	'flash3_volflow_in', 'makeup_solvent_molflow',
                                     ]
 # output_labels = ['recycle_outlet_co2_molflow']
 
@@ -51,16 +53,18 @@ trainer.config.screener = 1
 trainer.config.modeler = 1
 trainer.config.convpen = 1
 trainer.config.maxtime = 14400
-trainer.config.ncvf = 10
+trainer.config.ncvf = int(len(training_df))
 #trainer.config.maxterms = [10] * len(output_labels)
 #trainer.config.minterms = [64] * len(output_labels)
-#trainer.config.ZMIN = [0,0,0,0,-1e12,-1e12,0,0,0,-1e8,-1e12,0,0,0,0]
+#trainer.config.ZMIN = [0,0,0,0,0,0,0,0,0,0,-1e12,0,0,0,0]
 #trainer.config.ZMIN = [0] * len(output_labels)
 #trainer.config.ZMAX = [1000] * len(output_labels)
-#trainer.config.EXTRAPXMIN = [400,200,50e5,320,2000,245,6e6,5]
-#trainer.config.EXTRAPXMAX = [100,50,10e5,290,2000,245,6e6,5]
-#trainer.config.CRROBUST = False
-#trainer.config.CRMAXITER = 100000
+#trainer.config.EXTRAPXMIN = [100,50,10e5,290,800,220,2e5,4]
+#trainer.config.EXTRAPXMAX = [400,200,50e5,320,800,220,2e5,4]
+#trainer.config.CRROBUST = True
+#trainer.config.CRMAXITER = 10
+#trainer.config.CRNTRIALS = 100
+#trainer.config.CRCORNER = False
 #trainer.config.numlimitbasis = 0
 input_scales = [100,10,1e6,100,100,100,1e5,1]
 trainer.config.scalez = 1
@@ -79,8 +83,8 @@ surrogate_expressions = trainer._results['Model']
 alm_surr = idaes.core.surrogate.AlamoSurrogate(surrogate_expressions, input_labels, output_labels,input_bounds)
 model = alm_surr.save_to_file('temps/alamo_surrogate.json', overwrite=True)
 
-from co2_eor.utility.sm_plotter import surrogate_parity
+from co2_eor.surrogates.utility.sm_plotter import surrogate_parity
 surrogate_parity(alm_surr,[training_df,validation_df],dataset_labels=["Training Data","Testing Data"],error_bound=10,filename='temps/alamo_parity.pdf',show=False)
-from co2_eor.utility.sm_analysis import evaluate_surrogate_metrics
+from co2_eor.surrogates.utility.sm_analysis import evaluate_surrogate_metrics
 metrics_df = evaluate_surrogate_metrics(alm_surr,[training_df,validation_df],dataset_labels=["Training Data","Testing Data"])
 metrics_df.to_csv('temps/alamo_metrics.csv')

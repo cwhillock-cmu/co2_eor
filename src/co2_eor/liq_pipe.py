@@ -19,6 +19,7 @@ from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.math import smooth_abs, safe_log
 from co2_eor.utility.eq_builders import add_state_material_balances
 from pyomo.util.calc_var_value import calculate_variable_from_constraint
+from co2_eor.utility.eq_builders import add_pressure_thickness_expression
 
 #specify configuration options
 def make_liqPipe_config_block(config):
@@ -223,18 +224,21 @@ def add_equations(unit,config):
     except KeyError:
         average.visc_d_phase = pyo.Expression(["Liq"],expr=1e-4)
     #average reynolds number
-    average.Re = pyo.Expression(expr=
-        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
-        smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
-        #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
-        #smooth_abs(average.dens_mass*average.velocity*unit.diameter/9e-5,epsilon)
-        #average.dens_mass*average.velocity*unit.diameter/(1e-4)
-        )
-    
+    # average.Re = pyo.Expression(expr=
+    #     #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]
+    #     smooth_abs(average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"],epsilon)
+    #     #average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"]+1
+    #     #smooth_abs(average.dens_mass*average.velocity*unit.diameter/9e-5,epsilon)
+    #     #average.dens_mass*average.velocity*unit.diameter/(1e-4)
+    #     )
+    average.Re = pyo.Var(bounds=(0,None),initialize=1,domain=pyo.NonNegativeReals)
+    set_scaling_factor(average.Re,1e-7)
+    average.Re_con = pyo.Constraint(expr=average.Re==average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Liq"])
+    set_scaling_factor(average.Re_con,1e-7)
 
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
-        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
+        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re+1)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
         )
     
     # #hydraulic equation 7
@@ -367,7 +371,8 @@ def add_equations(unit,config):
 
     #auxiliary expressions
     unit.Pdrop = pyo.Expression(expr=inlet.pressure-outlet.pressure)
-    unit.thickness = pyo.Expression(expr=unit.max_pressure*unit.diameter/(2*(unit.allowable_stress-unit.max_pressure)))
+    #unit.thickness = pyo.Expression(expr=unit.max_pressure*unit.diameter/(2*(unit.allowable_stress-unit.max_pressure)))
+    add_pressure_thickness_expression(unit,unit.max_pressure,unit.diameter,unit.allowable_stress,overdesign=1)
 
 def guess_scales(unit):
     #create local variables
@@ -411,8 +416,6 @@ def guess_scales(unit):
     
     #auxiliary constraint scaling factors
     
-
-
 #define pipe class
 @declare_process_block_class("liqPipe")
 class liqPipeData(UnitModelBlockData):
@@ -458,6 +461,8 @@ class liqPipeData(UnitModelBlockData):
         self.control_volume.properties_avg[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
 
         self.control_volume.properties_avg[0].enth_mol.value = pyo.value(self.control_volume.properties_in[0].enth_mol)
+
+        calculate_variable_from_constraint(self.control_volume.properties_avg[0].Re,self.control_volume.properties_avg[0].Re_con)
 
         self.initialize_states()
 

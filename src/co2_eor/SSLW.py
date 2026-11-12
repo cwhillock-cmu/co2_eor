@@ -396,7 +396,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
             else:
                 return (
                     blk.material_factor
-                    == mf["A"] + (area_unit / (100 * pyo.units.ft**2)) ** mf["B"]
+                    == mf["A"] + (area_unit / (100 * pyo.units.ft**2)+1e-5) ** mf["B"]
                 )
 
         # ------------------------------------------------------
@@ -1477,6 +1477,7 @@ class SSLWCostingData(FlowsheetCostingBlockData):
         blk.size_factor = pyo.Var(
             initialize=10000,
             domain=pyo.NonNegativeReals,
+            bounds=(0,None),
             doc="Pump size factor, f(Q,pump_head)",
         )
 

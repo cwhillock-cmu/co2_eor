@@ -17,6 +17,7 @@ from idaes.core.util.scaling import set_scaling_factor
 from idaes.core.scaling.autoscaling import AutoScaler
 from idaes.core.util.math import smooth_abs, safe_log
 from pyomo.util.calc_var_value import calculate_variable_from_constraint
+from co2_eor.utility.eq_builders import add_pressure_thickness_expression
 
 #config options
 def make_config_block(config):
@@ -157,10 +158,12 @@ def add_equations(unit,config):
         #smooth_abs(average.dens_mass*average.velocity*unit.diameter/(average.visc_d_phase['Vap']),epsilon)
         average.dens_mass*average.velocity*unit.diameter/(average.visc_d_phase['Vap'])
         )
-    
+    # average.Re = pyo.Var(bounds=(0,None),initialize=1,domain=pyo.NonNegativeReals)
+    # average.Re_con = pyo.Constraint(expr=average.Re==average.dens_mass*average.velocity*unit.diameter/average.visc_d_phase["Vap"])
+
     #average friction factor
     average.inverse_f = pyo.Expression(expr=
-        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
+        4*pyo.log10((unit.roughness/3.7/(unit.diameter)+5.74/((average.Re+1)**0.9)))**(2) + unit.spos[1]-unit.sneg[1]
         )
     
     #compressibility
@@ -202,7 +205,8 @@ def add_equations(unit,config):
 
     #auxiliary expressions
     unit.Pdrop = pyo.Expression(expr=inlet.pressure-outlet.pressure)
-    unit.thickness = pyo.Expression(expr=unit.max_pressure*unit.diameter/(2*(unit.allowable_stress-unit.max_pressure)))
+    #unit.thickness = pyo.Expression(expr=unit.max_pressure*unit.diameter/(2*(unit.allowable_stress-unit.max_pressure)))
+    add_pressure_thickness_expression(unit,unit.max_pressure,unit.diameter,unit.allowable_stress,overdesign=1)
 
     #misc logic
     unit.misc_logic = pyo.ConstraintList()
@@ -295,6 +299,8 @@ class gasPipeData(UnitModelBlockData):
 
         self.outlet.temperature[0].value = pyo.value(self.control_volume.properties_in[0].temperature)
         self.control_volume.properties_avg[0].temperature.value = pyo.value(self.control_volume.properties_in[0].temperature)
+
+        #calculate_variable_from_constraint(self.control_volume.properties_avg[0].Re,self.control_volume.properties_avg[0].Re_con)
 
         self.initialize_states()
 

@@ -237,7 +237,9 @@ def add_equations(unit,name,config):
                     #+ unit.spos[1]-unit.sneg[1]
                 #unit.injectivity_index*smooth_max(inlet.pressure-unit.reference_pressure,0,epsilon)*unit.multiplier
                 #    + unit.spos[1]-unit.sneg[1]
-                unit.injectivity_index*(inlet.pressure-unit.reference_pressure)*unit.multiplier
+                # unit.injectivity_index*(inlet.pressure-unit.reference_pressure)*unit.multiplier
+                #    + unit.spos[1]-unit.sneg[1]   
+                unit.kovr/reservoir_state.visc_d_phase["Liq"]*(inlet.pressure-unit.reference_pressure)*unit.multiplier
                    + unit.spos[1]-unit.sneg[1]   
     )
     set_scaling_factor(unit.darcys_law,1e2)

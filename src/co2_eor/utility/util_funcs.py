@@ -231,3 +231,43 @@ def report_infeasibilities(model, filename):
     # 5. Explicitly detach and close the file handler so the file isn't locked
     logger.removeHandler(file_handler)
     file_handler.close()
+
+
+import os
+import sys
+from contextlib import contextmanager, redirect_stdout, redirect_stderr
+
+@contextmanager
+def redirect_output_to_file(filepath, mode="w"):
+    """Context manager that forces stdout and stderr to a file at both OS and Python levels."""
+    # Flush existing Python buffers
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    # Save original stdout (fd 1) and stderr (fd 2) file descriptors
+    saved_stdout_fd = os.dup(1)
+    saved_stderr_fd = os.dup(2)
+
+    with open(filepath, mode) as log_file:
+        # Redirect file descriptors (captures C libraries, compiled code, OS writes)
+        os.dup2(log_file.fileno(), 1)
+        os.dup2(log_file.fileno(), 2)
+
+        # Redirect Python-level streams (captures print() and sys.stdout/sys.stderr)
+        with redirect_stdout(log_file), redirect_stderr(log_file):
+            try:
+                yield
+            finally:
+                sys.stdout.flush()
+                sys.stderr.flush()
+                # Restore original OS file descriptors
+                os.dup2(saved_stdout_fd, 1)
+                os.dup2(saved_stderr_fd, 2)
+                os.close(saved_stdout_fd)
+                os.close(saved_stderr_fd)
+
+
+def run_with_redirection(func, filepath, *args, **kwargs):
+    """Runs a target function with stdout and stderr redirected to filepath, then restores terminal output."""
+    with redirect_output_to_file(filepath):
+        return func(*args, **kwargs)

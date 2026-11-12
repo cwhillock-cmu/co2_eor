@@ -89,6 +89,7 @@ def add_global_params(unit,config):
     set_scaling_factor(unit.solvent_mass_dens,1e-2)
     unit.recycle_outlet_temperature = pyo.Param(initialize=config.global_parameters["recycle_outlet_temperature"],units=units.K)
     set_scaling_factor(unit.recycle_outlet_temperature,1e-2)
+    unit.co2_recovery_min = pyo.Param(initialize=config.global_parameters["co2_recovery_min"])
 
 def add_global_vars(unit,config):
     unit.loop_solvent_flow = pyo.Var(domain=pyo.NonNegativeReals,initialize=1,bounds=(0,10000),units=units.mol/units.s)
@@ -236,15 +237,15 @@ def build_surrogate(unit,config):
     outlet = unit.control_volume.properties_out[0]
     recycle = unit.control_volume.properties_recycle[0]
 
-    inputs = [inlet.flow_mol_comp['co2'],inlet.flow_mol_comp['ch4'],inlet.pressure,inlet.temperature,unit.loop_solvent_flow,unit.exchanger1.outlet_temperature,unit.flash3.pressure,unit.column.Nstages]
-    outputs = [recycle.flow_mol_comp['co2'],recycle.flow_mol_comp['ch4'],#recycle.pressure,#recycle.temperature,
+    unit.inputs = [inlet.flow_mol_comp['co2'],inlet.flow_mol_comp['ch4'],inlet.pressure,inlet.temperature,unit.loop_solvent_flow,unit.exchanger1.outlet_temperature,unit.flash3.pressure,unit.column.Nstages]
+    unit.outputs = [recycle.flow_mol_comp['co2'],recycle.flow_mol_comp['ch4'],#recycle.pressure,#recycle.temperature,
                outlet.temperature,
                unit.column.diameter,unit.exchanger1.area,unit.exchanger1.duty,unit.pump1.control_volume.properties_in[0].flow_vol,
                unit.pump1.work_mechanical,unit.compressor1.work_mechanical,unit.compressor2.work_mechanical,unit.compressor2.duty,
                unit.flash1.flow_vol,unit.flash2.flow_vol,unit.flash3.flow_vol,unit.makeup_solvent_flow]
 
     unit.surrogate = SurrogateBlock()
-    unit.surrogate.build_model(config.surrogate_object,input_vars=inputs,output_vars=outputs,use_surrogate_bounds=False)
+    unit.surrogate.build_model(config.surrogate_object,input_vars=unit.inputs,output_vars=unit.outputs,use_surrogate_bounds=False)
 
     #scale surrogate eqns
     set_scaling_factor(unit.surrogate.alamo_constraint['recycle_outlet_co2_molflow'],1e-1)
@@ -258,11 +259,11 @@ def build_surrogate(unit,config):
 
     #build inlet bound constraints
     unit.input_min_cons = pyo.ConstraintList()
-    for i,var in enumerate(inputs):
+    for i,var in enumerate(unit.inputs):
         unit.input_min_cons.add(expr=var>=config.surrogate_input_bounds[1][i])
         set_scaling_factor(unit.input_min_cons[i+1],1/config.surrogate_input_bounds[1][i])
     unit.input_max_cons = pyo.ConstraintList()
-    for i,var in enumerate(inputs):
+    for i,var in enumerate(unit.inputs):
         unit.input_max_cons.add(expr=var<=config.surrogate_input_bounds[0][i])
         set_scaling_factor(unit.input_max_cons[i+1],1/config.surrogate_input_bounds[0][i])
 
@@ -270,9 +271,13 @@ def build_surrogate(unit,config):
         unit.hyperplane_cuts = pyo.ConstraintList()
         for hp_dict in config.hyperplane_cuts:
             lhs = hp_dict["bias"]
-            for i,var in enumerate(inputs):
+            for i,var in enumerate(unit.inputs):
                 lhs += hp_dict["weights"][i]*var
             unit.hyperplane_cuts.add(expr=lhs<=0)
+
+    #build co2 recovery constraint (used for training)
+    unit.co2_recovery_con = pyo.Constraint(expr=recycle.flow_mol_comp['co2']/inlet.flow_mol_comp['co2']>=unit.co2_recovery_min)
+    set_scaling_factor(unit.co2_recovery_con,1e-2)
 
 def build_costing_model(unit):
     unit.costing = SSLWCosting()
@@ -369,16 +374,16 @@ def build_costing_model(unit):
     #TODO:implement
     unit.solvent_tank.costing = pyo.Block()
 
-    # unit.pump1.costing = idaes.core.UnitModelCostingBlock(
-    #     flowsheet_costing_block=unit.costing,
-    #     costing_method=SSLWCostingData.cost_pump,
-    #     costing_method_arguments={
-    #         "pump_type":"Centrifugal",
-    #         "material_type":"StainlessSteel",
-    #         "pump_type_factor":1.4,
-    #         "motor_type":"open"
-    #     }
-    # )
+    unit.pump1.costing = idaes.core.UnitModelCostingBlock(
+        flowsheet_costing_block=unit.costing,
+        costing_method=SSLWCostingData.cost_pump,
+        costing_method_arguments={
+            "pump_type":"Centrifugal",
+            "material_type":"StainlessSteel",
+            "pump_type_factor":1.4,
+            "motor_type":"open"
+        }
+    )
 
     bm_factors = {
         "ST_exchanger":3.17,
@@ -391,7 +396,7 @@ def build_costing_model(unit):
     unit.costing.capital_cost = pyo.Expression(expr=
                                                          unit.column.costing.capital_cost * bm_factors['vertical_vessel']
                                                          + unit.exchanger1.costing.capital_cost * bm_factors["ST_exchanger"]
-                                                         #+ unit.pump1.costing.capital_cost * bm_factors["pump"]
+                                                         + unit.pump1.costing.capital_cost * bm_factors["pump"]
                                                          + (unit.compressor1.costing.capital_cost + unit.compressor2.costing.capital_cost) * bm_factors["compressor"]
                                                          + (unit.flash1.costing.capital_cost + unit.flash2.costing.capital_cost + unit.flash3.costing.capital_cost) * bm_factors["horizontal_vessel"]
     )
@@ -439,22 +444,26 @@ class processingFacilityData(UnitModelBlockData):
                 self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.9
                 self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.1
             else:
-                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.33
-                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.67
+                self.control_volume.properties_out[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.1
+                self.control_volume.properties_recycle[0].flow_mol_comp[j].value = self.control_volume.properties_in[0].flow_mol_comp[j].value * 0.9
 
         self.initialize_states()
 
     def deactivate_surrogate_input_bounds(self):
         self.input_min_cons.deactivate()
         self.input_max_cons.deactivate()
+        #self.co2_recovery_con.deactivate()
+        for i,var in enumerate(self.inputs):
+            var.lb = None
+            var.ub = None
 
     def activate_surrogate_input_bounds(self):
         self.input_min_cons.activate()
         self.input_max_cons.activate()
-
-    def set_surrogate_input_lbs(self):
-        pass
-        #TODO: MAKE THIS FUNCTION
+        #self.co2_recovery_con.activate()
+        for i,var in enumerate(self.inputs):
+            var.lb = self.config.surrogate_input_bounds[1][i]
+            var.ub = self.config.surrogate_input_bounds[0][i]
 
     def initialize(self,solver=None,tee=False,display_after=False):
         print(f'initializing {self.name}')

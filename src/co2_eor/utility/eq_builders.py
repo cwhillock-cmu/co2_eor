@@ -142,6 +142,6 @@ def add_state_material_balances(self, balance_type=None, state_1=None, state_2=N
     
     setattr(self,name,state_material_balance_eq)
 
-def add_pressure_thickness_expression(blk,pressure=None,diameter=None,allowable_stress=None,overdesign=1.1):
+def add_pressure_thickness_expression(blk,pressure=None,diameter=None,allowable_stress=None,overdesign=1):
     pressure_thickness_expression = pyo.Expression(expr=overdesign*pressure*diameter/(2*(allowable_stress-overdesign*pressure)))
     setattr(blk,"thickness",pressure_thickness_expression)
